@@ -1,6 +1,7 @@
 // @ts-check
 // devkit-core.mjs - shared safety checks and the plan -> confirm -> run flow used by
-// nmclean.mjs, nminstall.mjs and devclean.mjs. Runs on Windows, macOS and Linux. Node 18+, no dependencies.
+// nmclean.mjs, nminstall.mjs, devclean.mjs and npmrctoken.mjs.
+// Runs on Windows, macOS and Linux. Node 18+, no dependencies.
 // The safety model these checks implement is described once, in README.md ("Safety model").
 
 import { exec, execFile } from 'node:child_process';
@@ -14,14 +15,17 @@ import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------- types
 
-/** @typedef {{ ok: boolean, output: string }} RunResult  outcome of one action */
+/**
+ * Outcome of one action. `summary` replaces the plan detail on the ok line, e.g. a value read back after writing.
+ * @typedef {{ ok: boolean, output: string, summary?: string }} RunResult
+ */
 /**
  * Outcome of a child process.
  * @typedef {RunResult & { code: number, stdout: string, timedOut: boolean }} CommandResult
  */
 /**
  * One finished plan item, reported like gpall's results.
- * @typedef {{ name: string, ok: boolean, output: string }} Result
+ * @typedef {{ name: string, ok: boolean, output: string, summary?: string }} Result
  */
 /** @typedef {{ name: string, real: string }} Repo  a repo folder name and its resolved path */
 /** @typedef {{ bytes: number, files: number, newest: number, truncated: boolean, hasNestedRepo: boolean }} TreeInfo */
@@ -622,17 +626,14 @@ export async function findRepos(rootReal) {
 }
 
 /**
- * Folders in a repo named in `names` (or devkit leftovers of them) that sit next to a package.json.
- * Never follows links and never enters dot-folders (.venv, .yarn, .next, ...), node_modules or nested repos.
+ * Visit a repo's folders breadth-first, starting with the repo folder itself. Never follows links and
+ * never enters dot-folders (.venv, .yarn, .next, ...), node_modules, devkit leftovers or nested repos.
  * @param {string} repoReal  resolved repo folder
- * @param {readonly string[]} names  folder names to look for
+ * @param {(dir: string, entries: import('node:fs').Dirent[]) => Set<string>} visit
+ *   called once per folder with its entries; returns the names of subfolders not to enter
  * @param {{ maxDepth?: number }} [options]  how many levels deep to search
- * @returns {Promise<string[]>} sorted absolute paths
  */
-export async function findNamedDirs(repoReal, names, { maxDepth = MAX_SEARCH_DEPTH } = {}) {
-  const wanted = new Set(names);
-  /** @type {string[]} */
-  const found = [];
+async function walkRepo(repoReal, visit, { maxDepth = MAX_SEARCH_DEPTH } = {}) {
   const queue = [{ dir: repoReal, depth: 0 }];
 
   for (let next = queue.shift(); next; next = queue.shift()) {
@@ -645,27 +646,17 @@ export async function findNamedDirs(repoReal, names, { maxDepth = MAX_SEARCH_DEP
       continue;
     }
 
-    const isPackage = entries.some((entry) => entry.name === PACKAGE_JSON && entry.isFile());
+    const handled = visit(dir, entries);
 
     for (const entry of entries) {
-      if (!entry.isDirectory() || entry.isSymbolicLink()) {
+      if (!entry.isDirectory() || entry.isSymbolicLink() || handled.has(entry.name)) {
         continue;
       }
 
       const full = path.join(dir, entry.name);
-      const base = trashBase(entry.name);
-
-      if (wanted.has(entry.name) || (base !== null && wanted.has(base))) {
-        if (isPackage) {
-          found.push(full);
-        }
-
-        continue;
-      }
-
       const descend = !entry.name.startsWith('.')
         && entry.name !== NODE_MODULES
-        && base === null
+        && trashBase(entry.name) === null
         && depth + 1 < maxDepth
         && !(await exists(path.join(full, GIT_FOLDER))) // nested repo or submodule
         && (await validateTarget(repoReal, full)) === null; // plain folder, no link on the way
@@ -675,6 +666,67 @@ export async function findNamedDirs(repoReal, names, { maxDepth = MAX_SEARCH_DEP
       }
     }
   }
+}
+
+/**
+ * True when a folder's entries include a package.json file.
+ * @param {import('node:fs').Dirent[]} entries  the folder's entries
+ * @returns {boolean} whether the folder is a Node package
+ */
+const isPackageFolder = (entries) => entries.some((entry) => entry.name === PACKAGE_JSON && entry.isFile());
+
+/**
+ * Folders in a repo named in `names` (or devkit leftovers of them) that sit next to a package.json.
+ * Searches the folders that walkRepo visits.
+ * @param {string} repoReal  resolved repo folder
+ * @param {readonly string[]} names  folder names to look for
+ * @param {{ maxDepth?: number }} [options]  how many levels deep to search
+ * @returns {Promise<string[]>} sorted absolute paths
+ */
+export async function findNamedDirs(repoReal, names, options = {}) {
+  const wanted = new Set(names);
+  /** @type {string[]} */
+  const found = [];
+
+  await walkRepo(repoReal, (dir, entries) => {
+    const matches = entries.filter((entry) => {
+      const base = trashBase(entry.name);
+
+      return entry.isDirectory()
+        && !entry.isSymbolicLink()
+        && (wanted.has(entry.name) || (base !== null && wanted.has(base)));
+    });
+
+    if (isPackageFolder(entries)) {
+      found.push(...matches.map((entry) => path.join(dir, entry.name)));
+    }
+
+    return new Set(matches.map((entry) => entry.name));
+  }, options);
+
+  return found.sort();
+}
+
+/**
+ * Entries named `fileName` in the repo folder and in every package folder (one with a package.json) below
+ * it. Searches the folders that walkRepo visits. Links are returned too, so the caller can report them.
+ * @param {string} repoReal  resolved repo folder
+ * @param {string} fileName  e.g. ".npmrc"
+ * @returns {Promise<string[]>} sorted absolute paths
+ */
+export async function findPackageFiles(repoReal, fileName) {
+  /** @type {string[]} */
+  const found = [];
+
+  await walkRepo(repoReal, (dir, entries) => {
+    const inPackage = dir === repoReal || isPackageFolder(entries);
+
+    if (inPackage && entries.some((entry) => entry.name === fileName && !entry.isDirectory())) {
+      found.push(path.join(dir, fileName));
+    }
+
+    return new Set();
+  });
 
   return found.sort();
 }
@@ -1212,12 +1264,13 @@ function printSection({ title, items }) {
  */
 export async function runItems(items, { jobs, log = async () => {}, onResult = () => {} }) {
   return mapPool(items, jobs, async (item) => {
+    /** @type {RunResult} */
     const outcome = await item.run().catch((err) => ({ ok: false, output: errorText(err) }));
     const failure = outcome.ok ? '' : ` | ${outcome.output.replace(WHITESPACE_RUNS, ' ')}`;
 
     await log(`${outcome.ok ? 'ok  ' : 'FAIL'} ${item.name}${failure}`);
 
-    const result = { name: item.name, ok: outcome.ok, output: outcome.output };
+    const result = { name: item.name, ok: outcome.ok, output: outcome.output, summary: outcome.summary };
 
     onResult(result, item);
 
@@ -1265,7 +1318,9 @@ export async function planAndRun({ sections, options, verb, logName }) {
       jobs: options.jobs,
       log,
       onResult: (result, item) => {
-        console.log(`${result.ok ? 'ok  ' : 'FAIL'}  ${result.name.padEnd(NAME_COLUMN_WIDTH)} ${describe(item)}`);
+        const detail = result.summary ?? describe(item);
+
+        console.log(`${result.ok ? 'ok  ' : 'FAIL'}  ${result.name.padEnd(NAME_COLUMN_WIDTH)} ${detail}`);
       },
     });
     const failed = results.filter((result) => !result.ok);

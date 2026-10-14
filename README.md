@@ -8,8 +8,9 @@ Node.js scripts for the folder that holds your git repos. They run on Windows (b
 | `nmclean.mjs` | deletes `node_modules` in every repo, including workspace packages | dry run |
 | `nminstall.mjs` | lockfile-exact install: `npm ci`, `yarn install --frozen-lockfile` (Yarn 1) or `yarn install --immutable` (Yarn 2+) | dry run, one repo at a time |
 | `devclean.mjs` | periodic cleanup: stale `node_modules`, old build outputs, old temp-folder entries, npm/Yarn 1 caches; review-only report of agent files | dry run |
+| `npmrctoken.mjs` | puts a new registry token into the `_authToken=` line of every `.npmrc`, in repo folders and their package folders | dry run |
 
-`devkit-core.mjs` holds the shared safety checks and the plan → confirm → run flow of `nmclean`, `nminstall` and `devclean`. `gpall` is standalone: it deletes nothing, so it needs none of those checks. All four scripts share these conventions:
+`devkit-core.mjs` holds the shared safety checks and the plan → confirm → run flow of `nmclean`, `nminstall`, `devclean` and `npmrctoken`. `gpall` is standalone: it deletes nothing, so it needs none of those checks. All the scripts share these conventions:
 
 - an optional bare number sets the number of parallel jobs;
 - an `ok`/`FAIL` line is printed per item as it finishes;
@@ -19,7 +20,7 @@ Node.js scripts for the folder that holds your git repos. They run on Windows (b
 
 ## Setup
 
-Copy `gpall.mjs`, `nmclean.mjs`, `nminstall.mjs`, `devclean.mjs` and `devkit-core.mjs` into `~/scripts/`. The `*.test.mjs` files and `test-helpers.mjs` are only for running the tests. Then add these lines to your shell's startup file:
+Copy `gpall.mjs`, `nmclean.mjs`, `nminstall.mjs`, `devclean.mjs`, `npmrctoken.mjs` and `devkit-core.mjs` into `~/scripts/`. The `*.test.mjs` files and `test-helpers.mjs` are only for running the tests. Then add these lines to your shell's startup file:
 
 - Git Bash on Windows, and most Linux shells: `~/.bashrc`;
 - macOS: `~/.zshrc`.
@@ -29,10 +30,29 @@ alias gpall='node ~/scripts/gpall.mjs'
 alias nmclean='node ~/scripts/nmclean.mjs'
 alias nminstall='node ~/scripts/nminstall.mjs'
 alias devclean='node ~/scripts/devclean.mjs'
+alias npmrctoken='node ~/scripts/npmrctoken.mjs'
 node ~/scripts/devclean.mjs --due   # one line at terminal start when a cleanup is due
 ```
 
-Run the commands from your repos folder. Each script has `--help`. `nmclean`, `nminstall` and `devclean` only print a plan (a dry run); add `--apply` to act on it. If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--yes` after reviewing the dry run.
+Run the commands from your repos folder. Each script has `--help`. `nmclean`, `nminstall`, `devclean` and `npmrctoken` only print a plan (a dry run); add `--apply` to act on it. If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--yes` after reviewing the dry run.
+
+### Updating the registry token
+
+`npmrctoken` takes the new token as its first argument. Tokens are always shown masked: the first and last 4 characters, with stars in between.
+
+```bash
+npmrctoken npm_NewToken1234XyZ9            # dry run: lists every .npmrc and what would change
+npmrctoken npm_NewToken1234XyZ9 --apply    # writes the files after you type "yes"
+```
+
+```
+  do    app/.npmrc                 //npm.example.com/  npm_************a1b2  ->  npm_************XyZ9
+  keep  tools/.npmrc               WARNING: 2 _authToken lines found; update this file by hand
+...
+ok    app/.npmrc                   now npm_************XyZ9
+```
+
+The token you type is saved in your shell history. Clear that line from the history if other people use the machine.
 
 ## Workflow
 
@@ -52,7 +72,7 @@ flowchart LR
 
 ## Safety model
 
-These rules apply to `nmclean`, `nminstall` and `devclean`. `gpall` only runs `git pull`.
+These rules apply to `nmclean`, `nminstall`, `devclean` and `npmrctoken`. `gpall` only runs `git pull`.
 
 **Where scripts refuse to run** (exit 2, nothing changed):
 
@@ -93,7 +113,16 @@ macOS and Linux allow renaming and deleting files that are in use. There, a fold
 
 Only top-level entries with nothing newer than the cutoff are deleted, each re-checked first. Links are kept. On macOS and Linux, entries owned by another user are kept too, since `/tmp` is shared.
 
-**Process.** An `--apply` run holds one lock shared by the three scripts, so two of them never change files at the same time. A live run keeps refreshing the lock. Every action is logged to `%LOCALAPPDATA%\devkit\logs` on Windows and `~/.local/state/devkit/logs` elsewhere.
+**Token updates** (`npmrctoken` only):
+
+- only the text after `=` in the `_authToken=` line changes; every other byte of the file stays the same, including line endings;
+- a file with more than one `_authToken=` line is left unchanged with a warning, since each registry probably needs its own token;
+- an `.npmrc` that is a link is left alone, because it could point to your user-wide `~/.npmrc`;
+- `.npmrc` files committed to git are updated too, so check `git status` before you commit;
+- each file is read again right before writing, and read back afterwards to confirm the new token is there;
+- the full token never appears in the output or the log.
+
+**Process.** An `--apply` run holds one lock shared by these scripts, so two of them never change files at the same time. A live run keeps refreshing the lock. Every action is logged to `%LOCALAPPDATA%\devkit\logs` on Windows and `~/.local/state/devkit/logs` elsewhere.
 
 **Child processes:**
 
@@ -132,7 +161,7 @@ If the first `Test-Path` prints `False`, stop using the scripts and report the o
 *Consequences:* the scripts need nothing installed, and tests run with `node --test`. TypeScript's type checking works without a build step. Junction handling relies on Node's `lstat`, so it needs the one-time Windows check above.
 
 **2. Shared core plus small scripts.**
-*Context:* three scripts need the same safety checks and run flow; copying them risks the copies drifting apart.
+*Context:* several scripts need the same safety checks and run flow; copying them risks the copies drifting apart.
 *Decision:* `devkit-core.mjs` owns every check and the plan/confirm/run flow; each script only plans its items.
 *Consequences:* safety fixes land in one place, but the scripts must be copied together.
 
