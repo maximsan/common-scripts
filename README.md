@@ -195,6 +195,15 @@ node --test         # tests only; needs no install
 
 The house rules, each with its reason, are in `eslint.config.mjs`.
 
+To run the tests on Linux from macOS or Windows, use Docker from this folder. `node:18` is the oldest Node the scripts support; `node:22` is a current one.
+
+```bash
+docker run --rm --init -u node -v "$PWD":/work:ro -w /work node:18 node --test
+docker run --rm --init -u node -v "$PWD":/work:ro -w /work node:22 node --test
+```
+
+Keep `--init`. Without it, `node` is the container's first process, and ended child processes are never cleared away. The test that kills a timed-out command then fails.
+
 The tests pass on macOS and on Linux. They have not been run on Windows. The Windows path rules, protected folders, temp-folder location and child environment are still tested there, through the Windows entry of the platform rules.
 
 ## Known limits
