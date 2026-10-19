@@ -5,8 +5,8 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { findTokenLines, maskToken, parseCommandLine, planEdit } from './npmrctoken.mjs';
-import { makeRepo, runScript, tempWorkspace, write } from './test-helpers.mjs';
+import { findTokenLines, main, maskToken, parseCommandLine, planEdit } from './npmrctoken.mjs';
+import { makeRepo, runScript, tempWorkspace, testContext, write } from './test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('npmrctoken');
 const stateDir = join(workspace, 'state');
@@ -57,7 +57,7 @@ test('parseCommandLine: the token comes first, even when it looks like a job cou
   }
 });
 
-test('dry run lists every file, --apply updates them, and the full token never appears in output or log', () => {
+test('dry run lists every file, --apply updates them, and the full token never appears in output or log', async () => {
   const root = join(workspace, 'repos');
   const app = makeRepo(root, 'app');
   const lib = makeRepo(root, 'lib');
@@ -73,40 +73,54 @@ test('dry run lists every file, --apply updates them, and the full token never a
   write(shared, tokenLine);
   symlinkSync(shared, join(lib, '.npmrc'));
 
-  /**
-   * Run npmrctoken as a child process in the test's repos folder.
-   * @param {...string} args  command-line arguments
-   * @returns {import('node:child_process').SpawnSyncReturns<string>} exit status and output
-   */
-  const npmrctoken = (...args) => runScript('npmrctoken.mjs', args, { cwd: root, stateDir });
+  const dryRun = testContext({ cwd: root, stateDir });
 
-  const dryRun = npmrctoken(NEW_TOKEN);
+  assert.equal(await main([NEW_TOKEN], dryRun.context), 0);
 
-  assert.equal(dryRun.status, 0, dryRun.stderr);
-  assert.match(dryRun.stdout, /do {4}app\/\.npmrc .*npm_\*{12}1111 {2}-> {2}npm_\*{12}2222/);
-  assert.match(dryRun.stdout, /do {4}lib\/packages\/ui\/\.npmrc/);
-  assert.match(dryRun.stdout, /keep {2}lib\/\.npmrc .*symlink/);
-  assert.match(dryRun.stdout, /keep {2}tools\/\.npmrc .*WARNING: 2 _authToken lines/);
-  assert.match(dryRun.stdout, /1 warning\(s\)/);
-  assert.doesNotMatch(dryRun.stdout, /docs/);
+  const planned = dryRun.output();
+
+  assert.match(planned, /do {4}app\/\.npmrc .*npm_\*{12}1111 {2}-> {2}npm_\*{12}2222/);
+  assert.match(planned, /do {4}lib\/packages\/ui\/\.npmrc/);
+  assert.match(planned, /keep {2}lib\/\.npmrc .*symlink/);
+  assert.match(planned, /keep {2}tools\/\.npmrc .*WARNING: 2 _authToken lines/);
+  assert.match(planned, /1 warning\(s\)/);
+  assert.doesNotMatch(planned, /docs/);
   assert.equal(readFileSync(join(app, '.npmrc'), 'utf8'), tokenLine);
 
-  const applied = npmrctoken(NEW_TOKEN, '--apply', '--yes');
+  const applied = testContext({ cwd: root, stateDir });
   const newLine = tokenLine.replace(OLD_TOKEN, NEW_TOKEN);
 
-  assert.equal(applied.status, 0, applied.stdout + applied.stderr);
-  assert.match(applied.stdout, /ok {4}app\/\.npmrc +now npm_\*{12}2222/);
-  assert.match(applied.stdout, /ok {4}lib\/packages\/ui\/\.npmrc +now npm_\*{12}2222/);
+  assert.equal(await main([NEW_TOKEN, '--apply'], applied.context), 0, applied.output());
+  assert.match(applied.output(), /ok {4}app\/\.npmrc +now npm_\*{12}2222/);
+  assert.match(applied.output(), /ok {4}lib\/packages\/ui\/\.npmrc +now npm_\*{12}2222/);
   assert.equal(readFileSync(join(app, '.npmrc'), 'utf8'), newLine);
   assert.equal(readFileSync(join(lib, 'packages', 'ui', '.npmrc'), 'utf8'), newLine);
   assert.equal(readFileSync(join(lib, 'docs', '.npmrc'), 'utf8'), tokenLine);
   assert.equal(readFileSync(shared, 'utf8'), tokenLine);
   assert.match(readFileSync(join(tools, '.npmrc'), 'utf8'), new RegExp(OLD_TOKEN));
 
-  const logsDir = join(stateDir, 'devkit', 'logs');
+  const logsDir = join(stateDir, 'logs');
   const logs = readdirSync(logsDir).map((file) => readFileSync(join(logsDir, file), 'utf8')).join('');
 
-  for (const output of [dryRun.stdout, applied.stdout, logs]) {
+  for (const output of [planned, applied.output(), logs]) {
     assert.doesNotMatch(output, new RegExp(`${OLD_TOKEN}|${NEW_TOKEN}`));
   }
+});
+
+test('as a process: prints the masked plan, and refuses --apply without a terminal', () => {
+  const root = join(workspace, 'process');
+  const app = makeRepo(root, 'app');
+
+  write(join(app, '.npmrc'), `//npm.example.com/:_authToken=${OLD_TOKEN}\n`);
+
+  const dryRun = runScript('npmrctoken.mjs', [NEW_TOKEN], { cwd: root, stateDir });
+
+  assert.equal(dryRun.status, 0, dryRun.stderr);
+  assert.match(dryRun.stdout, /do {4}app\/\.npmrc .*npm_\*{12}2222/);
+  assert.doesNotMatch(dryRun.stdout, new RegExp(NEW_TOKEN));
+
+  const refused = runScript('npmrctoken.mjs', [NEW_TOKEN, '--apply'], { cwd: root, stateDir });
+
+  assert.equal(refused.status, 2);
+  assert.match(refused.stderr, /No interactive terminal/);
 });

@@ -204,18 +204,19 @@ export function parseCommandLine(argv) {
 /**
  * Plan, and with --apply write, the new token into every .npmrc under the current folder.
  * @param {string[]} argv  command-line arguments after the script name
+ * @param {import('./devkit-core.mjs').RunContext} context  the folder, state folder, output and confirmation to use
  * @returns {Promise<number>} exit code
  */
-export async function main(argv) {
+export async function main(argv, context) {
   const { token, options } = parseCommandLine(argv);
 
   if (options.help) {
-    console.log(HELP);
+    context.print(HELP);
 
     return EXIT_OK;
   }
 
-  const root = await assertSafeRoot(process.cwd());
+  const root = await assertSafeRoot(context.cwd);
   const repos = await findRepos(root);
   const files = (await mapPool(repos, options.jobs, async (repo) => {
     const found = await findPackageFiles(repo.real, NPMRC);
@@ -233,10 +234,11 @@ export async function main(argv) {
     options,
     verb: 'update',
     logName: 'npmrctoken',
+    context,
   });
 
   if (warnings) {
-    console.log(`\n${warnings} warning(s): those files were left unchanged. See the WARNING lines above.`);
+    context.print(`\n${warnings} warning(s): those files were left unchanged. See the WARNING lines above.`);
   }
 
   return code;

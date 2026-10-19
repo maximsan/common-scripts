@@ -253,18 +253,19 @@ export async function planInstalls(repos) {
 /**
  * Plan, and with --apply run, a lockfile-exact install in every repo under the current folder.
  * @param {string[]} argv  command-line arguments after the script name
+ * @param {import('./devkit-core.mjs').RunContext} context  the folder, state folder, output and confirmation to use
  * @returns {Promise<number>} exit code
  */
-export async function main(argv) {
+export async function main(argv, context) {
   const options = parseArgs(argv, { defaults: { jobs: DEFAULT_INSTALL_JOBS } });
 
   if (options.help) {
-    console.log(HELP);
+    context.print(HELP);
 
     return EXIT_OK;
   }
 
-  const root = await assertSafeRoot(process.cwd());
+  const root = await assertSafeRoot(context.cwd);
   const repos = await findRepos(root);
   const title = `Installs for ${repos.length} repo(s) under ${root} (replaces ${NODE_MODULES}, runs install scripts)`;
   const { code } = await planAndRun({
@@ -272,6 +273,7 @@ export async function main(argv) {
     options,
     verb: 'install',
     logName: 'nminstall',
+    context,
   });
 
   return code;

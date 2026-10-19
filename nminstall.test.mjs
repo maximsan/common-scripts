@@ -5,8 +5,8 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { detectPackageManager } from './nminstall.mjs';
-import { makeRepo, runScript, tempWorkspace, write } from './test-helpers.mjs';
+import { detectPackageManager, main } from './nminstall.mjs';
+import { makeRepo, runScript, tempWorkspace, testContext, write } from './test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('nminstall');
 const stateDir = join(workspace, 'state');
@@ -56,7 +56,7 @@ test('detectPackageManager covers npm, Yarn 1, Yarn 2+ and every skip case', asy
   assert.match('skip' in none ? none.skip : '', /no package.json/);
 });
 
-test('install needs confirmation, then runs npm ci and leaves the lockfile unchanged', () => {
+test('install runs npm ci after confirmation and leaves the lockfile unchanged', async () => {
   const root = join(workspace, 'repos');
   const app = makeRepo(root, 'app');
   const lockfile = join(app, 'package-lock.json');
@@ -74,25 +74,20 @@ test('install needs confirmation, then runs npm ci and leaves the lockfile uncha
 
   write(join(app, 'node_modules', 'stale.js'));
 
-  /**
-   * Run nminstall as a child process in the test's repos folder.
-   * @param {...string} args  command-line arguments
-   * @returns {import('node:child_process').SpawnSyncReturns<string>} exit status and output
-   */
-  const nminstall = (...args) => runScript('nminstall.mjs', args, { cwd: root, stateDir });
+  const dryRun = testContext({ cwd: root, stateDir });
 
-  assert.match(nminstall().stdout, /npm ci/);
-  assert.equal(nminstall('--apply').status, 2); // no terminal and no --yes
+  assert.equal(await main([], dryRun.context), 0);
+  assert.match(dryRun.output(), /npm ci/);
   assert.equal(existsSync(join(app, 'node_modules', 'stale.js')), true);
 
-  const applied = nminstall('--apply', '--yes');
+  const applied = testContext({ cwd: root, stateDir });
 
-  assert.equal(applied.status, 0, applied.stdout + applied.stderr);
+  assert.equal(await main(['--apply'], applied.context), 0, applied.output());
   assert.equal(existsSync(join(app, 'node_modules', 'stale.js')), false);
   assert.equal(readFileSync(lockfile, 'utf8'), lockBefore);
 });
 
-test('an existing node_modules that is a link or holds a nested repo is kept in the plan, not installed', () => {
+test('an existing node_modules that is a link or holds a nested repo is kept in the plan, not installed', async () => {
   const root = join(workspace, 'blocked');
   const linked = makeRepo(root, 'linked');
   const nested = makeRepo(root, 'nested');
@@ -104,12 +99,29 @@ test('an existing node_modules that is a link or holds a nested repo is kept in 
   write(join(nested, 'package-lock.json'), '{}');
   write(join(nested, 'node_modules', 'patched-lib', '.git', 'HEAD'));
 
-  const applied = runScript('nminstall.mjs', ['--apply', '--yes'], { cwd: root, stateDir });
+  const { context, output } = testContext({ cwd: root, stateDir });
 
-  assert.equal(applied.status, 0, applied.stdout + applied.stderr);
-  assert.match(applied.stdout, /keep {2}linked .*existing node_modules is a symlink\/junction/);
-  assert.match(applied.stdout, /keep {2}nested .*existing node_modules contains a nested git repo/);
-  assert.match(applied.stdout, /Nothing to do/);
+  assert.equal(await main(['--apply'], context), 0, output());
+  assert.match(output(), /keep {2}linked .*existing node_modules is a symlink\/junction/);
+  assert.match(output(), /keep {2}nested .*existing node_modules contains a nested git repo/);
+  assert.match(output(), /Nothing to do/);
   assert.equal(existsSync(join(shared, 'keep.js')), true);
   assert.equal(existsSync(join(nested, 'node_modules', 'patched-lib', '.git', 'HEAD')), true);
+});
+
+test('as a process: prints the plan, and refuses --apply without a terminal', () => {
+  const root = join(workspace, 'process');
+  const app = makeRepo(root, 'app');
+
+  write(join(app, 'package-lock.json'), '{}');
+
+  const dryRun = runScript('nminstall.mjs', [], { cwd: root, stateDir });
+
+  assert.equal(dryRun.status, 0, dryRun.stderr);
+  assert.match(dryRun.stdout, /do {4}app .*npm ci/);
+
+  const refused = runScript('nminstall.mjs', ['--apply'], { cwd: root, stateDir });
+
+  assert.equal(refused.status, 2);
+  assert.match(refused.stderr, /No interactive terminal/);
 });

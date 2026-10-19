@@ -11,7 +11,7 @@ import {
   planAndRun, planFolders, processTree, removeRepoFolder, resolveTempDir, runItems, runShell, safeRemoveTree,
   SafetyError, skippedItem, trashBase,
 } from './devkit-core.mjs';
-import { git, makeRepo, tempWorkspace, write } from './test-helpers.mjs';
+import { git, makeRepo, tempWorkspace, testContext, write } from './test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('devkit-core');
 
@@ -323,17 +323,20 @@ test('runItems attempts every item and returns failures as data', async () => {
 });
 
 test('planAndRun returns exit code 1 on a failure and refuses while another run holds the lock', async () => {
-  process.env.LOCALAPPDATA = join(workspace, 'state');
-
-  const options = { apply: true, yes: true, help: false, jobs: 1 };
+  const stateDir = join(workspace, 'state');
+  const { context } = testContext({ cwd: workspace, stateDir });
+  const options = { apply: true, yes: false, help: false, jobs: 1 };
   const failing = { name: 'bad', skip: null, run: async () => ({ ok: false, output: 'boom' }) };
   const sections = [{ title: 'test', items: [failing, skippedItem('kept', 'reason')] }];
+  const run = await planAndRun({ sections, options, verb: 'run', logName: 'test', context });
 
-  assert.deepEqual(await planAndRun({ sections, options, verb: 'run', logName: 'test' }), { code: 1, applied: true });
+  assert.equal(run.code, 1);
+  assert.equal(run.applied, true);
+  assert.deepEqual(run.results.map((result) => [result.name, result.ok, result.output]), [['bad', false, 'boom']]);
 
-  write(join(workspace, 'state', 'devkit', 'devkit.lock'), '999999\n');
+  write(join(stateDir, 'devkit.lock'), '999999\n');
 
-  const whileLocked = planAndRun({ sections, options, verb: 'run', logName: 'test' });
+  const whileLocked = planAndRun({ sections, options, verb: 'run', logName: 'test', context });
 
   await assert.rejects(whileLocked, /Another devkit script is running/);
 });

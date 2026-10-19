@@ -103,3 +103,27 @@ export function runScript(script, args, { cwd, stateDir, env = {} }) {
     env: { ...process.env, LOCALAPPDATA: stateDir, ...env },
   });
 }
+
+/**
+ * A run context for calling a script's main in-process: printed lines are collected, and every
+ * confirmation gets the same answer.
+ * @param {{ cwd: string, stateDir: string, tempDir?: string, answer?: boolean }} options
+ *   the folder to run in, where state goes, the temp folder, and the answer to "continue?"
+ * @returns {{ context: import('./devkit-core.mjs').RunContext, output: () => string }}
+ *   the context, and everything printed so far as one text
+ */
+export function testContext({ cwd, stateDir, tempDir = tmpdir(), answer = true }) {
+  /** @type {string[]} */
+  const lines = [];
+  const context = {
+    cwd,
+    stateDir,
+    tempDir,
+    print: (line = '') => {
+      lines.push(line);
+    },
+    confirm: async () => answer,
+  };
+
+  return { context, output: () => lines.join('\n') };
+}

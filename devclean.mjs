@@ -67,6 +67,7 @@ const HELP = `Periodic cleanup for the repos under the current folder (dry run b
 /** @typedef {import('./devkit-core.mjs').Repo} Repo */
 /** @typedef {import('./devkit-core.mjs').PlanItem} PlanItem */
 /** @typedef {import('./devkit-core.mjs').PlanSection} PlanSection */
+/** @typedef {import('./devkit-core.mjs').RunContext} RunContext */
 
 /**
  * Newest file change in a repo's working tree; node_modules, .git and build outputs are ignored.
@@ -297,20 +298,21 @@ async function claudeCleanupDays(claudeDir) {
 /**
  * Print what Claude Code and other agents left behind. Review only: nothing is deleted.
  * @param {Repo[]} repos  repos whose untracked files are listed
+ * @param {RunContext['print']} print  where output goes
  * @param {{ now?: number, home?: string }} [options]  the time to measure ages from, and the home folder
  */
-export async function reportAgentFiles(repos, { now = Date.now(), home = homedir() } = {}) {
-  console.log('\nFiles from Claude Code and other agents (review only, never deleted)');
+export async function reportAgentFiles(repos, print, { now = Date.now(), home = homedir() } = {}) {
+  print('\nFiles from Claude Code and other agents (review only, never deleted)');
 
   const claudeDir = path.join(home, CLAUDE_FOLDER);
 
   if (await exists(claudeDir)) {
     const size = formatBytes((await measure(claudeDir)).bytes);
 
-    console.log(`  ~/.claude is ${size}. Claude Code deletes its own transcripts and`);
-    console.log(`  session files after cleanupPeriodDays (${await claudeCleanupDays(claudeDir)}); `
+    print(`  ~/.claude is ${size}. Claude Code deletes its own transcripts and`);
+    print(`  session files after cleanupPeriodDays (${await claudeCleanupDays(claudeDir)}); `
       + 'lower it in ~/.claude/settings.json to keep less.');
-    console.log('  For a project folder you no longer use: claude project purge <path> --dry-run');
+    print('  For a project folder you no longer use: claude project purge <path> --dry-run');
   }
 
   for (const repo of repos) {
@@ -320,33 +322,34 @@ export async function reportAgentFiles(repos, { now = Date.now(), home = homedir
       continue;
     }
 
-    console.log(`  ${repo.name}: ${files.length} untracked file(s), newest first`);
+    print(`  ${repo.name}: ${files.length} untracked file(s), newest first`);
 
     for (const file of files.slice(0, UNTRACKED_SHOWN_PER_REPO)) {
       const warning = SECRET_FILE.test(file.relativePath) ? '  (may hold secrets: review by hand)' : '';
       const age = `${ageInDays(file.mtime, now)}d`.padStart(AGE_COLUMN_WIDTH);
 
-      console.log(`    ${age}  ${formatBytes(file.bytes).padStart(SIZE_COLUMN_WIDTH)}  ${file.relativePath}${warning}`);
+      print(`    ${age}  ${formatBytes(file.bytes).padStart(SIZE_COLUMN_WIDTH)}  ${file.relativePath}${warning}`);
     }
 
     if (files.length > UNTRACKED_SHOWN_PER_REPO) {
-      console.log(`    ... and ${files.length - UNTRACKED_SHOWN_PER_REPO} more (git status in ${repo.name})`);
+      print(`    ... and ${files.length - UNTRACKED_SHOWN_PER_REPO} more (git status in ${repo.name})`);
     }
   }
 }
 
 /**
  * One line when the last applied cleanup is overdue, nothing otherwise. Never throws, so it is safe in .bashrc.
+ * @param {RunContext} context  where the saved state is and where output goes
  * @param {{ dueDays?: number, now?: number }} [options]  days between cleanups, and the current time
  */
-export async function printIfDue({ dueDays = DUE_AFTER_DAYS, now = Date.now() } = {}) {
+export async function printIfDue({ stateDir, print }, { dueDays = DUE_AFTER_DAYS, now = Date.now() } = {}) {
   try {
-    const last = Date.parse((await readState()).lastCleanup ?? '');
+    const last = Date.parse((await readState(stateDir)).lastCleanup ?? '');
 
     if (Number.isNaN(last)) {
-      console.log('devclean: no cleanup recorded yet. Run "devclean" in your repos folder to review (dry run).');
+      print('devclean: no cleanup recorded yet. Run "devclean" in your repos folder to review (dry run).');
     } else if (now - last >= dueDays * DAY_MS) {
-      console.log(`devclean: last cleanup ${ageInDays(last, now)} days ago. Run "devclean" to review (dry run).`);
+      print(`devclean: last cleanup ${ageInDays(last, now)} days ago. Run "devclean" to review (dry run).`);
     }
   } catch {
     // never break a shell startup
@@ -355,20 +358,20 @@ export async function printIfDue({ dueDays = DUE_AFTER_DAYS, now = Date.now() } 
 
 /**
  * The temp section, or null with a printed reason when the temp folder is not where it should be.
- * @param {{ tempDays: number, now: number, tempDir?: string }} options
- *   age threshold, the time to measure ages from, and a test override for the temp folder
+ * @param {RunContext} context  the temp folder, and where output goes
+ * @param {{ tempDays: number, now: number }} options  age threshold, and the time to measure ages from
  * @returns {Promise<PlanSection | null>} the section, or null when skipped
  */
-async function tempSection({ tempDays, now, tempDir }) {
+async function tempSection({ tempDir, print }, { tempDays, now }) {
   try {
-    const tempReal = await resolveTempDir(tempDir ? { temp: tempDir } : {});
+    const tempReal = await resolveTempDir({ temp: tempDir });
     const { items, keptCount } = await planTemp(tempReal, { tempDays, now });
     const title = `Temp-folder entries with nothing newer than ${tempDays} days (${tempReal}); `
       + `${keptCount} kept (newer, a link, or another user's)`;
 
     return { title, items };
   } catch (err) {
-    console.log(`\nTemp folder: ${err instanceof Error ? err.message : err}`);
+    print(`\nTemp folder: ${err instanceof Error ? err.message : err}`);
 
     return null;
   }
@@ -377,10 +380,10 @@ async function tempSection({ tempDays, now, tempDir }) {
 /**
  * Plan, and with --apply run, the periodic cleanup; or print the --due reminder.
  * @param {string[]} argv  command-line arguments after the script name
- * @param {{ tempDir?: string }} [overrides]  tests pass their own temp folder
+ * @param {RunContext} context  the folders, output and confirmation to use
  * @returns {Promise<number>} exit code
  */
-export async function main(argv, { tempDir } = {}) {
+export async function main(argv, context) {
   const options = parseArgs(argv, {
     defaults: {
       due: false,
@@ -395,22 +398,22 @@ export async function main(argv, { tempDir } = {}) {
   });
 
   if (options.help) {
-    console.log(HELP);
+    context.print(HELP);
 
     return EXIT_OK;
   }
 
   if (options.due) {
-    await printIfDue();
+    await printIfDue(context);
 
     return EXIT_OK;
   }
 
-  const root = await assertSafeRoot(process.cwd());
+  const root = await assertSafeRoot(context.cwd);
   const repos = await findRepos(root);
   const now = Date.now();
 
-  await reportAgentFiles(repos, { now });
+  await reportAgentFiles(repos, context.print, { now });
 
   /** @type {PlanSection[]} */
   const sections = [];
@@ -430,7 +433,7 @@ export async function main(argv, { tempDir } = {}) {
   }
 
   if (options.only.has('temp')) {
-    const section = await tempSection({ tempDays: options.tempDays, now, tempDir });
+    const section = await tempSection(context, { tempDays: options.tempDays, now });
 
     if (section) {
       sections.push(section);
@@ -441,13 +444,13 @@ export async function main(argv, { tempDir } = {}) {
     sections.push({ title: 'Package manager caches (cleaned through their own commands)', items: await planCaches() });
   }
 
-  const { code, applied } = await planAndRun({ sections, options, verb: 'clean', logName: 'devclean' });
+  const { code, applied } = await planAndRun({ sections, options, verb: 'clean', logName: 'devclean', context });
 
   if (applied) {
-    await writeState({ lastCleanup: new Date(now).toISOString() });
+    await writeState(context.stateDir, { lastCleanup: new Date(now).toISOString() });
   }
 
   return code;
 }
 
-runMain(import.meta.url, (argv) => main(argv));
+runMain(import.meta.url, main);

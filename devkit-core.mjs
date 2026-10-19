@@ -38,6 +38,17 @@ import { fileURLToPath } from 'node:url';
 /** @typedef {{ title: string, items: PlanItem[] }} PlanSection */
 /** @typedef {{ apply: boolean, yes: boolean, help: boolean, jobs: number }} BaseOptions  flags every script accepts */
 /**
+ * Where a script run takes its surroundings from (see "run context" in GLOSSARY.md). runMain builds it
+ * from the process; tests pass their own.
+ * @typedef {{
+ *   cwd: string,
+ *   stateDir: string,
+ *   tempDir: string,
+ *   print: (line?: string) => void,
+ *   confirm: (question: string) => Promise<boolean>,
+ * }} RunContext
+ */
+/**
  * Decides whether a planned folder is kept: returns the reason to keep it, or null to delete it.
  * `fresh` is true on the re-check right before deletion, so cached values must be recomputed.
  * @typedef {(tree: TreeInfo, repo: Repo, context: { fresh: boolean }) => Promise<string | null>} KeepRule
@@ -1065,22 +1076,13 @@ export async function planFolders(repos, names, { jobs = DEFAULT_JOBS, keepIf = 
 // ---------------------------------------------------------------- state, lock, log, confirm
 
 /**
- * Folder for the lock, logs and saved state.
- * @returns {string} %LOCALAPPDATA%\devkit on Windows, ~/.local/state/devkit elsewhere
- */
-const stateDir = () => {
-  const parent = process.env[STATE_PARENT_ENV] || path.join(homedir(), ...UNIX_STATE_PARENT);
-
-  return path.join(parent, STATE_FOLDER);
-};
-
-/**
  * Read the saved state.
+ * @param {string} stateDir  the run context's state folder
  * @returns {Promise<{ lastCleanup?: string }>} the state, or an empty object when none is saved
  */
-export async function readState() {
+export async function readState(stateDir) {
   try {
-    return JSON.parse(await readFile(path.join(stateDir(), STATE_FILE), TEXT_ENCODING));
+    return JSON.parse(await readFile(path.join(stateDir, STATE_FILE), TEXT_ENCODING));
   } catch {
     return {};
   }
@@ -1088,13 +1090,14 @@ export async function readState() {
 
 /**
  * Merge fields into the saved state.
+ * @param {string} stateDir  the run context's state folder
  * @param {{ lastCleanup?: string }} patch  fields to set
  */
-export async function writeState(patch) {
-  const merged = { ...(await readState()), ...patch };
+export async function writeState(stateDir, patch) {
+  const merged = { ...(await readState(stateDir)), ...patch };
 
-  await mkdir(stateDir(), { recursive: true });
-  await writeFile(path.join(stateDir(), STATE_FILE), JSON.stringify(merged, null, STATE_JSON_INDENT));
+  await mkdir(stateDir, { recursive: true });
+  await writeFile(path.join(stateDir, STATE_FILE), JSON.stringify(merged, null, STATE_JSON_INDENT));
 }
 
 /**
@@ -1102,13 +1105,14 @@ export async function writeState(patch) {
  * never overlap. A live run refreshes the lock; only a lock untouched for LOCK_STALE_MS is taken over,
  * and a run only removes the lock if it still holds its own process id.
  * @template T
+ * @param {string} stateDir  the run context's state folder, where the lock lives
  * @param {() => Promise<T>} task  the work to do while holding the lock
  * @returns {Promise<T>} what `task` returned
  */
-async function withLock(task) {
-  await mkdir(stateDir(), { recursive: true });
+async function withLock(stateDir, task) {
+  await mkdir(stateDir, { recursive: true });
 
-  const lockPath = path.join(stateDir(), LOCK_FILE);
+  const lockPath = path.join(stateDir, LOCK_FILE);
   const owner = `${process.pid}\n`;
   let handle;
 
@@ -1153,11 +1157,12 @@ async function withLock(task) {
 
 /**
  * Open a new log file for one run.
+ * @param {string} stateDir  the run context's state folder, where logs go
  * @param {string} name  script name, part of the file name
  * @returns {Promise<{ file: string, log: (line: string) => Promise<void> }>} the log's path and a writer
  */
-async function createLog(name) {
-  const dir = path.join(stateDir(), LOGS_FOLDER);
+async function createLog(stateDir, name) {
+  const dir = path.join(stateDir, LOGS_FOLDER);
 
   await mkdir(dir, { recursive: true });
 
@@ -1174,16 +1179,11 @@ async function createLog(name) {
 }
 
 /**
- * Ask for a typed "yes". Without an interactive terminal, refuse unless --yes was given.
+ * Ask in the terminal for a typed "yes". Refuses when there is no interactive terminal to ask in.
  * @param {string} question  the prompt text
- * @param {{ yes: boolean }} options  true skips the prompt
  * @returns {Promise<boolean>} whether to go ahead
  */
-async function confirm(question, { yes }) {
-  if (yes) {
-    return true;
-  }
-
+async function askInTerminal(question) {
   if (!process.stdin.isTTY) {
     throw new SafetyError('No interactive terminal to confirm in: re-run with --yes. Nothing was changed.');
   }
@@ -1197,6 +1197,26 @@ async function confirm(question, { yes }) {
   } finally {
     prompt.close();
   }
+}
+
+/**
+ * The run context of a real run: the process's folder, the per-user state and temp folders, the terminal.
+ * State goes to %LOCALAPPDATA%\devkit on Windows and ~/.local/state/devkit elsewhere; a set LOCALAPPDATA
+ * wins on every platform.
+ * @returns {RunContext} the context
+ */
+export function processContext() {
+  const stateParent = process.env[STATE_PARENT_ENV] || path.join(homedir(), ...UNIX_STATE_PARENT);
+
+  return {
+    cwd: process.cwd(),
+    stateDir: path.join(stateParent, STATE_FOLDER),
+    tempDir: tmpdir(),
+    print: (line = '') => {
+      console.log(line);
+    },
+    confirm: askInTerminal,
+  };
 }
 
 // ---------------------------------------------------------------- output
@@ -1261,18 +1281,19 @@ const capitalize = (word) => word.charAt(0).toUpperCase() + word.slice(1);
 /**
  * Print one plan section: a title and a "do" or "keep" line per item.
  * @param {PlanSection} section  the section to print
+ * @param {RunContext['print']} print  where output goes
  */
-function printSection({ title, items }) {
-  console.log(`\n${title}`);
+function printSection({ title, items }, print) {
+  print(`\n${title}`);
 
   if (!items.length) {
-    console.log('  (nothing found)');
+    print('  (nothing found)');
   }
 
   for (const item of items) {
     const action = item.skip ? 'keep' : 'do  ';
 
-    console.log(`  ${action}  ${item.name.padEnd(NAME_COLUMN_WIDTH)} ${item.skip ?? describe(item)}`);
+    print(`  ${action}  ${item.name.padEnd(NAME_COLUMN_WIDTH)} ${item.skip ?? describe(item)}`);
   }
 }
 
@@ -1303,40 +1324,47 @@ export async function runItems(items, { jobs, log = async () => {}, onResult = (
 }
 
 /**
- * The shared flow: print the plan -> stop if dry run -> confirm -> lock -> runItems, printing ok/FAIL per
- * item as it finishes -> list failures with details at the end (like gpall).
- * @param {{ sections: PlanSection[], options: BaseOptions, verb: string, logName: string }} args
- *   the plan, the parsed flags, the action word for messages ("delete"), and the log file's name
- * @returns {Promise<{ code: number, applied: boolean }>} exit code, and whether --apply ran to the end
+ * The shared flow: print the plan -> stop if dry run -> confirm (unless --yes) -> lock -> runItems, printing
+ * ok/FAIL per item as it finishes -> list failures with details at the end (like gpall).
+ * @param {{ sections: PlanSection[], options: BaseOptions, verb: string, logName: string, context: RunContext }} args
+ *   the plan, the parsed flags, the action word for messages ("delete"), the log file's name, and the run context
+ * @returns {Promise<{ code: number, applied: boolean, results: Result[] }>}
+ *   exit code, whether --apply ran to the end, and each item's result (none without a run)
  */
-export async function planAndRun({ sections, options, verb, logName }) {
-  sections.forEach(printSection);
+export async function planAndRun({ sections, options, verb, logName, context }) {
+  const { print } = context;
+
+  for (const section of sections) {
+    printSection(section, print);
+  }
 
   const todo = sections.flatMap((section) => section.items).filter((item) => !item.skip);
   const size = totalBytes(todo) ? ` (${formatBytes(totalBytes(todo))})` : '';
 
   if (!todo.length) {
-    console.log('\nNothing to do.');
+    print('\nNothing to do.');
 
-    return { code: EXIT_OK, applied: options.apply };
+    return { code: EXIT_OK, applied: options.apply, results: [] };
   }
 
   if (!options.apply) {
-    console.log(`\nDry run: nothing changed. Re-run with --apply to ${verb} ${todo.length} item(s)${size}.`);
+    print(`\nDry run: nothing changed. Re-run with --apply to ${verb} ${todo.length} item(s)${size}.`);
 
-    return { code: EXIT_OK, applied: false };
+    return { code: EXIT_OK, applied: false, results: [] };
   }
 
-  if (!(await confirm(`\n${capitalize(verb)} ${todo.length} item(s)${size}?`, options))) {
-    console.log('Cancelled. Nothing was changed.');
+  const question = `\n${capitalize(verb)} ${todo.length} item(s)${size}?`;
 
-    return { code: EXIT_OK, applied: false };
+  if (!options.yes && !(await context.confirm(question))) {
+    print('Cancelled. Nothing was changed.');
+
+    return { code: EXIT_OK, applied: false, results: [] };
   }
 
-  return withLock(async () => {
-    const { file, log } = await createLog(logName);
+  return withLock(context.stateDir, async () => {
+    const { file, log } = await createLog(context.stateDir, logName);
 
-    console.log();
+    print();
 
     const results = await runItems(todo, {
       jobs: options.jobs,
@@ -1344,19 +1372,19 @@ export async function planAndRun({ sections, options, verb, logName }) {
       onResult: (result, item) => {
         const detail = result.summary ?? describe(item);
 
-        console.log(`${result.ok ? 'ok  ' : 'FAIL'}  ${result.name.padEnd(NAME_COLUMN_WIDTH)} ${detail}`);
+        print(`${result.ok ? 'ok  ' : 'FAIL'}  ${result.name.padEnd(NAME_COLUMN_WIDTH)} ${detail}`);
       },
     });
     const failed = results.filter((result) => !result.ok);
     const summary = failed.length ? `${failed.length} failed` : 'all ok';
 
-    console.log(`\nDone: ${results.length} item(s), ${summary}. Log: ${file}`);
+    print(`\nDone: ${results.length} item(s), ${summary}. Log: ${file}`);
 
     for (const result of failed) {
-      console.log(`\n--- ${result.name}\n${indent(result.output)}`);
+      print(`\n--- ${result.name}\n${indent(result.output)}`);
     }
 
-    return { code: failed.length ? EXIT_FAILED : EXIT_OK, applied: true };
+    return { code: failed.length ? EXIT_FAILED : EXIT_OK, applied: true, results };
   });
 }
 
@@ -1452,10 +1480,10 @@ async function isEntryPoint(importMetaUrl) {
 }
 
 /**
- * Run `main` only when the calling file is executed directly (not when tests import it).
- * Exit codes: what `main` returns (0 ok, 1 some items failed), 2 refused by a safety check.
+ * Run `main` with the process's run context, only when the calling file is executed directly (not when
+ * tests import it). Exit codes: what `main` returns (0 ok, 1 some items failed), 2 refused by a safety check.
  * @param {string} importMetaUrl  the caller's import.meta.url
- * @param {(argv: string[]) => Promise<number>} main  the script's work; returns the exit code
+ * @param {(argv: string[], context: RunContext) => Promise<number>} main  the script's work; returns the exit code
  */
 export async function runMain(importMetaUrl, main) {
   if (!(await isEntryPoint(importMetaUrl))) {
@@ -1463,7 +1491,7 @@ export async function runMain(importMetaUrl, main) {
   }
 
   try {
-    process.exitCode = await main(process.argv.slice(SCRIPT_ARGS_START));
+    process.exitCode = await main(process.argv.slice(SCRIPT_ARGS_START), processContext());
   } catch (err) {
     console.error(err instanceof SafetyError ? err.message : err);
     process.exitCode = EXIT_REFUSED;

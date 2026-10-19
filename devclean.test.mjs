@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { findRepos } from './devkit-core.mjs';
 import { main, planBuildOutputs, planStaleNodeModules, planTemp } from './devclean.mjs';
-import { backdate, git, makeRepo, runScript, tempWorkspace, write } from './test-helpers.mjs';
+import { backdate, git, makeRepo, runScript, tempWorkspace, testContext, write } from './test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('devclean');
 
@@ -88,13 +88,35 @@ test('applied cleanup removes old temp entries, records the run, and --due goes 
 
   makeRepo(root, 'app');
 
-  const temp = join(workspace, 'cli-temp');
+  const tempDir = join(workspace, 'cli-temp');
 
-  write(join(temp, 'old.tmp'));
-  backdate(join(temp, 'old.tmp'), 30);
-  write(join(temp, 'new.tmp'));
+  write(join(tempDir, 'old.tmp'));
+  backdate(join(tempDir, 'old.tmp'), 30);
+  write(join(tempDir, 'new.tmp'));
 
   const stateDir = join(workspace, 'state');
+  const before = testContext({ cwd: root, stateDir, tempDir });
+
+  assert.equal(await main(['--due'], before.context), 0);
+  assert.match(before.output(), /no cleanup recorded/);
+
+  const applied = testContext({ cwd: root, stateDir, tempDir });
+
+  assert.equal(await main(['--only', 'temp', '--apply'], applied.context), 0, applied.output());
+  assert.equal(existsSync(join(tempDir, 'old.tmp')), false);
+  assert.equal(existsSync(join(tempDir, 'new.tmp')), true);
+
+  const later = testContext({ cwd: root, stateDir, tempDir });
+
+  assert.equal(await main(['--due'], later.context), 0);
+  assert.equal(later.output(), '');
+});
+
+test('as a process: --due reminds on a fresh state, and an unknown section is refused', () => {
+  const root = join(workspace, 'process');
+  const stateDir = join(workspace, 'process-state');
+
+  makeRepo(root, 'app');
 
   /**
    * Run devclean as a child process in the test's repos folder.
@@ -105,20 +127,4 @@ test('applied cleanup removes old temp entries, records the run, and --due goes 
 
   assert.match(devclean('--due').stdout, /no cleanup recorded/);
   assert.equal(devclean('--only', 'temp,home').status, 2);
-
-  // In-process, so the test can point the temp section at its own folder.
-  const previousCwd = process.cwd();
-
-  process.env.LOCALAPPDATA = stateDir;
-  process.chdir(root);
-
-  try {
-    assert.equal(await main(['--only', 'temp', '--apply', '--yes'], { tempDir: temp }), 0);
-  } finally {
-    process.chdir(previousCwd);
-  }
-
-  assert.equal(existsSync(join(temp, 'old.tmp')), false);
-  assert.equal(existsSync(join(temp, 'new.tmp')), true);
-  assert.equal(devclean('--due').stdout, '');
 });
