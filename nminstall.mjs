@@ -10,14 +10,14 @@
 //
 // Lockfiles are never modified. Repos without a lockfile, with both lockfiles, with a packageManager
 // field that contradicts the lockfile, or using pnpm/bun are skipped with the reason. An existing
-// node_modules must pass the same checks as nmclean (no link, git-ignored, no tracked files) or the
-// repo is not installed. A failed install never stops the run; failures are listed at the end.
+// node_modules must pass the same checks as nmclean (checkRepoFolder), in the plan and again before the
+// install, or the repo is not installed. A failed install never stops the run; failures are listed at the end.
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  assertSafeRoot, errorCode, EXIT_OK, exists, findRepos, gitGuard, NODE_MODULES, PACKAGE_JSON, parseArgs, planAndRun,
-  runMain, runShell, safeRemoveTree, skippedItem, validateTarget, YARN_BERRY_MAJOR, yarnMajor,
+  assertSafeRoot, checkRepoFolder, errorCode, EXIT_OK, exists, findRepos, NODE_MODULES, PACKAGE_JSON, parseArgs,
+  planAndRun, removeRepoFolder, runMain, runShell, skippedItem, YARN_BERRY_MAJOR, yarnMajor,
 } from './devkit-core.mjs';
 
 const DEFAULT_INSTALL_JOBS = 1; // installs compete for disk and network; one at a time by default
@@ -160,8 +160,26 @@ async function checkYarnVersion(repoReal, berry) {
 }
 
 /**
- * Package managers rewrite an existing node_modules (npm ci deletes it), so it must pass the same
- * checks as nmclean first. For npm it is then deleted through the safe path, before npm ci runs.
+ * Why an existing node_modules must not be rewritten by an install (Yarn changes it in place, npm ci
+ * deletes it). Absent is fine.
+ * @param {string} repoReal  resolved repo folder
+ * @returns {Promise<string | null>} problem, or null when the install may proceed
+ */
+async function nodeModulesProblem(repoReal) {
+  const target = path.join(repoReal, NODE_MODULES);
+
+  if (!(await exists(target))) {
+    return null;
+  }
+
+  const { reason } = await checkRepoFolder(repoReal, target);
+
+  return reason && `existing ${NODE_MODULES} ${reason}`;
+}
+
+/**
+ * Get an existing node_modules ready right before the install, checking it again. For npm it is deleted
+ * through the safe path, so npm ci finds none to delete itself.
  * @param {string} repoReal  resolved repo folder
  * @param {InstallPlan} plan  how the repo will be installed
  * @returns {Promise<string | null>} problem, or null when the install may proceed
@@ -169,21 +187,11 @@ async function checkYarnVersion(repoReal, berry) {
 async function prepareNodeModules(repoReal, plan) {
   const target = path.join(repoReal, NODE_MODULES);
 
-  if (!(await exists(target))) {
-    return null;
+  if (plan.manager !== 'npm' || !(await exists(target))) {
+    return nodeModulesProblem(repoReal);
   }
 
-  const blocked = (await validateTarget(repoReal, target)) ?? (await gitGuard(repoReal, target));
-
-  if (blocked) {
-    return `existing ${NODE_MODULES} ${blocked}`;
-  }
-
-  if (plan.manager !== 'npm') {
-    return null;
-  }
-
-  const removal = await safeRemoveTree(target, repoReal);
+  const removal = await removeRepoFolder(repoReal, target);
 
   return removal.ok ? null : `existing ${NODE_MODULES}: ${removal.output}`;
 }
@@ -227,8 +235,15 @@ export async function planInstalls(repos) {
   for (const repo of repos) {
     const plan = await detectPackageManager(repo.real);
 
-    items.push('skip' in plan
-      ? skippedItem(repo.name, plan.skip)
+    if ('skip' in plan) {
+      items.push(skippedItem(repo.name, plan.skip));
+      continue;
+    }
+
+    const problem = await nodeModulesProblem(repo.real);
+
+    items.push(problem
+      ? skippedItem(repo.name, problem)
       : { name: repo.name, detail: plan.command, skip: null, run: () => installRepo(repo.real, plan) });
   }
 

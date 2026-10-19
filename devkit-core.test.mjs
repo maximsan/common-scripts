@@ -7,8 +7,9 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, renameSync, symlinkSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import {
-  assertSafeRoot, findNamedDirs, findRepos, gitGuard, IS_WINDOWS, isInside, NODE_MODULES, parseArgs, planAndRun,
-  planFolders, processTree, resolveTempDir, runItems, runShell, safeRemoveTree, SafetyError, skippedItem, trashBase,
+  assertSafeRoot, checkRepoFolder, findNamedDirs, findRepos, IS_WINDOWS, isInside, NODE_MODULES, parseArgs,
+  planAndRun, planFolders, processTree, removeRepoFolder, resolveTempDir, runItems, runShell, safeRemoveTree,
+  SafetyError, skippedItem, trashBase,
 } from './devkit-core.mjs';
 import { git, makeRepo, tempWorkspace, write } from './test-helpers.mjs';
 
@@ -200,11 +201,22 @@ test('search skips dot-folders, folders without package.json, and nested repos',
   assert.deepEqual(await findNamedDirs(repo, ['dist']), []);
 });
 
-test('a target holding a nested repo or a case-variant tracked folder is kept', async () => {
-  const root = join(workspace, 'nested-target');
-  const repo = makeRepo(root, 'repo');
+test('checkRepoFolder applies every repo-folder rule', async () => {
+  const root = join(workspace, 'repo-folders');
+  const repo = makeRepo(root, 'rules', { ignore: 'ok/\nlinked/\nnested/\n\\[ab\\]/\n' });
+  const outside = join(workspace, 'repo-folders-outside');
+  const leftover = 'gone.devkit-deleting-1712345678901'; // not ignored: its new name matches no rule
 
-  write(join(repo, NODE_MODULES, 'patched-lib', '.git', 'HEAD'));
+  write(join(repo, 'ok', 'a.js'));
+  write(join(outside, 'precious.txt'));
+  symlinkSync(outside, join(repo, 'linked'), 'dir');
+  write(join(repo, 'not-ignored', 'a.js'));
+  write(join(repo, 'nested', 'patched-lib', '.git', 'HEAD'));
+  write(join(repo, 'a'));
+  git(repo, 'add', 'a');
+  git(repo, 'commit', '-q', '-m', 'a');
+  write(join(repo, '[ab]', 'x.js')); // "[ab]" is a folder name, not a glob matching the tracked "a"
+  write(join(repo, leftover, 'x.js'));
 
   const caseRepo = makeRepo(root, 'case', { ignore: '' });
 
@@ -214,23 +226,54 @@ test('a target holding a nested repo or a case-variant tracked folder is kept', 
   write(join(caseRepo, '.gitignore'), 'dist/\n');
   renameSync(join(caseRepo, 'Dist'), join(caseRepo, 'dist')); // a case-only rename, as on Windows
 
-  const skips = skipByName(await planFolders(await findRepos(root), [NODE_MODULES, 'dist']));
+  /**
+   * Always keeps, like an age rule that finds the folder too new.
+   * @returns {Promise<string>} the keep reason
+   */
+  const tooNew = async () => 'too new';
 
-  assert.match(String(skips['repo/node_modules']), /nested git repo/);
-  assert.match(String(skips['case/dist']), /tracked/);
+  /** @type {[string, string, RegExp | null, Parameters<typeof checkRepoFolder>[2]?][]} */
+  const cases = [
+    [repo, 'ok', null],
+    [repo, 'linked', /symlink/],
+    [repo, 'not-ignored', /not ignored/],
+    [repo, 'nested', /nested git repo/],
+    [repo, '[ab]', null],
+    [repo, leftover, null],
+    [caseRepo, 'dist', /tracked/],
+    [repo, 'ok', /too new/, { keepIf: tooNew }],
+    [repo, leftover, null, { keepIf: tooNew }], // a leftover is finished whatever its age
+  ];
+
+  for (const [repoReal, folder, expected, options] of cases) {
+    const { reason } = await checkRepoFolder(repoReal, join(repoReal, folder), options);
+    const label = `${folder}${options ? ' with keepIf' : ''}`;
+
+    if (expected) {
+      assert.match(String(reason), expected, label);
+    } else {
+      assert.equal(reason, null, label);
+    }
+  }
 });
 
-test('gitGuard reads [ab] as a folder name, not a glob matching tracked "a"', async () => {
-  const repo = makeRepo(join(workspace, 'literal'), 'repo', { ignore: '\\[ab\\]/\n' });
+test('removeRepoFolder checks again and deletes only a folder that passes', async () => {
+  const repo = makeRepo(join(workspace, 'remove-folder'), 'repo');
 
-  write(join(repo, 'a'));
-  git(repo, 'add', 'a');
-  git(repo, 'commit', '-q', '-m', 'a');
-  write(join(repo, '[ab]', 'x.js'));
-  assert.equal(await gitGuard(repo, join(repo, '[ab]')), null);
+  write(join(repo, NODE_MODULES, 'a.js'));
+  write(join(repo, 'dist', 'pkg', '.git', 'HEAD'));
+
+  assert.deepEqual(await removeRepoFolder(repo, join(repo, NODE_MODULES)), { ok: true, output: '' });
+  assert.equal(existsSync(join(repo, NODE_MODULES)), false);
+
+  const kept = await removeRepoFolder(repo, join(repo, 'dist'));
+
+  assert.equal(kept.ok, false);
+  assert.match(kept.output, /nested git repo.*re-checked before deleting; kept/);
+  assert.equal(existsSync(join(repo, 'dist', 'pkg', '.git', 'HEAD')), true);
 });
 
-test('gitGuard ignores GIT_DIR / GIT_INDEX_FILE inherited from the parent shell', async () => {
+test('checkRepoFolder ignores GIT_DIR / GIT_INDEX_FILE inherited from the parent shell', async () => {
   const root = join(workspace, 'git-env');
   const tracked = makeRepo(root, 'tracked', { ignore: '' });
 
@@ -244,8 +287,8 @@ test('gitGuard ignores GIT_DIR / GIT_INDEX_FILE inherited from the parent shell'
 
   try {
     // CHILD_ENV is built when devkit-core loads, so load a fresh copy while GIT_DIR is set.
-    const { gitGuard: freshGuard } = await import(`./devkit-core.mjs?env=${Date.now()}`);
-    const reason = await freshGuard(tracked, join(tracked, NODE_MODULES), { requireIgnored: false });
+    const { checkRepoFolder: freshCheck } = await import(`./devkit-core.mjs?env=${Date.now()}`);
+    const { reason } = await freshCheck(tracked, join(tracked, NODE_MODULES));
 
     assert.match(String(reason), /tracked/);
   } finally {

@@ -92,21 +92,24 @@ test('install needs confirmation, then runs npm ci and leaves the lockfile uncha
   assert.equal(readFileSync(lockfile, 'utf8'), lockBefore);
 });
 
-test('an existing node_modules that is a link stops the install of that repo', () => {
-  const root = join(workspace, 'linked');
-  const app = makeRepo(root, 'app');
-
-  write(join(app, 'package-lock.json'), '{}');
-
+test('an existing node_modules that is a link or holds a nested repo is kept in the plan, not installed', () => {
+  const root = join(workspace, 'blocked');
+  const linked = makeRepo(root, 'linked');
+  const nested = makeRepo(root, 'nested');
   const shared = join(workspace, 'shared-modules');
 
+  write(join(linked, 'package-lock.json'), '{}');
   write(join(shared, 'keep.js'));
-  symlinkSync(shared, join(app, 'node_modules'), 'dir');
+  symlinkSync(shared, join(linked, 'node_modules'), 'dir');
+  write(join(nested, 'package-lock.json'), '{}');
+  write(join(nested, 'node_modules', 'patched-lib', '.git', 'HEAD'));
 
   const applied = runScript('nminstall.mjs', ['--apply', '--yes'], { cwd: root, stateDir });
 
-  assert.equal(applied.status, 1);
-  assert.match(applied.stdout, /FAIL {2}app/);
-  assert.match(applied.stdout, /symlink\/junction/);
+  assert.equal(applied.status, 0, applied.stdout + applied.stderr);
+  assert.match(applied.stdout, /keep {2}linked .*existing node_modules is a symlink\/junction/);
+  assert.match(applied.stdout, /keep {2}nested .*existing node_modules contains a nested git repo/);
+  assert.match(applied.stdout, /Nothing to do/);
   assert.equal(existsSync(join(shared, 'keep.js')), true);
+  assert.equal(existsSync(join(nested, 'node_modules', 'patched-lib', '.git', 'HEAD')), true);
 });

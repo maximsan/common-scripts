@@ -516,7 +516,7 @@ export async function mapPool(items, limit, worker) {
  * @param {string} target  folder to check
  * @returns {Promise<string | null>} reason it must not be deleted, or null
  */
-export async function validateTarget(boundaryReal, target) {
+async function validateTarget(boundaryReal, target) {
   let info;
 
   try {
@@ -565,7 +565,7 @@ export async function validateTarget(boundaryReal, target) {
  * @param {{ requireIgnored?: boolean }} [options]  false skips the git-ignore check
  * @returns {Promise<string | null>} reason it must not be deleted, or null
  */
-export async function gitGuard(repoReal, target, { requireIgnored = true } = {}) {
+async function gitGuard(repoReal, target, { requireIgnored = true } = {}) {
   const relativePath = toPosix(path.relative(repoReal, target));
   const tracked = await git(['-C', repoReal, 'ls-files', '-z']);
 
@@ -956,6 +956,56 @@ export async function safeRemoveOldFile(file, boundaryReal, cutoffMs) {
   }
 }
 
+// ---------------------------------------------------------------- repo folders
+
+/**
+ * Whether a repo folder (see GLOSSARY.md) may be deleted or rewritten, applying every rule in README
+ * "What may be deleted in a repo". A devkit leftover skips the git-ignore check and `keepIf`: its new
+ * name no longer matches .gitignore, and it is already half deleted.
+ * @param {string} repoReal  resolved repo folder
+ * @param {string} target  folder inside the repo
+ * @param {{ keepIf?: ((tree: TreeInfo) => Promise<string | null>) | null }} [options]
+ *   an extra reason to keep the folder, e.g. its age
+ * @returns {Promise<{ reason: string | null, tree: TreeInfo | null }>}
+ *   why it must be kept (null: it may go), and its contents when they were measured
+ */
+export async function checkRepoFolder(repoReal, target, { keepIf = null } = {}) {
+  const leftover = trashBase(path.basename(target)) !== null;
+  const blocked = (await validateTarget(repoReal, target))
+    ?? (await gitGuard(repoReal, target, { requireIgnored: !leftover }));
+
+  if (blocked) {
+    return { reason: blocked, tree: null };
+  }
+
+  const tree = await measure(target);
+
+  if (tree.hasNestedRepo) {
+    return { reason: 'contains a nested git repo (left alone)', tree };
+  }
+
+  return { reason: keepIf && !leftover ? await keepIf(tree) : null, tree };
+}
+
+/**
+ * Delete a repo folder after checking it again with checkRepoFolder: git state, links and age can change
+ * between planning and running. Never rejects.
+ * @param {string} repoReal  resolved repo folder
+ * @param {string} target  folder inside the repo
+ * @param {{ keepIf?: ((tree: TreeInfo) => Promise<string | null>) | null }} [options]
+ *   an extra reason to keep the folder, e.g. its age
+ * @returns {Promise<RunResult>} ok, or why it was kept or what went wrong
+ */
+export async function removeRepoFolder(repoReal, target, options = {}) {
+  const { reason } = await checkRepoFolder(repoReal, target, options);
+
+  if (reason) {
+    return { ok: false, output: `${reason} (re-checked before deleting; kept)` };
+  }
+
+  return safeRemoveTree(target, repoReal);
+}
+
 // ---------------------------------------------------------------- planning
 
 /**
@@ -967,8 +1017,8 @@ export async function safeRemoveOldFile(file, boundaryReal, cutoffMs) {
 export const skippedItem = (name, reason) => ({ name, skip: reason, run: async () => ({ ok: false, output: reason }) });
 
 /**
- * Plan deletion of allow-listed folders in one repo. Each item re-runs every check right before it
- * deletes, because git state, age and links can change while the confirmation prompt is open.
+ * Plan deletion of allow-listed folders in one repo. Each item deletes through removeRepoFolder, which
+ * checks the folder again first.
  * @param {Repo} repo  the repo to search
  * @param {readonly string[]} names  folder names to delete, e.g. [NODE_MODULES]
  * @param {{ keepIf?: KeepRule | null }} [options]  extra reason to keep a folder, e.g. its age
@@ -978,49 +1028,23 @@ async function planRepoDirs(repo, names, { keepIf = null } = {}) {
   /** @type {PlanItem[]} */
   const items = [];
 
+  /**
+   * The keep rule for one phase of the run.
+   * @param {boolean} fresh  true right before deleting: cached values are recomputed
+   * @returns {((tree: TreeInfo) => Promise<string | null>) | null} the rule, or null without one
+   */
+  const keepIfFor = (fresh) => keepIf && ((tree) => keepIf(tree, repo, { fresh }));
+
   for (const target of await findNamedDirs(repo.real, names)) {
+    const planned = await checkRepoFolder(repo.real, target, { keepIf: keepIfFor(false) });
     const leftover = trashBase(path.basename(target)) !== null;
-
-    /**
-     * Every check for this folder.
-     * @param {boolean} fresh  true right before deleting: cached values are recomputed
-     * @returns {Promise<{ reason: string | null, bytes: number | null }>} why to keep it, and its size
-     */
-    const check = async (fresh) => {
-      const blocked = (await validateTarget(repo.real, target))
-        ?? (await gitGuard(repo.real, target, { requireIgnored: !leftover }));
-
-      if (blocked) {
-        return { reason: blocked, bytes: null };
-      }
-
-      const tree = await measure(target);
-
-      if (tree.hasNestedRepo) {
-        return { reason: 'contains a nested git repo (left alone)', bytes: tree.bytes };
-      }
-
-      const reason = keepIf && !leftover ? await keepIf(tree, repo, { fresh }) : null;
-
-      return { reason, bytes: tree.bytes };
-    };
-
-    const planned = await check(false);
 
     items.push({
       name: `${repo.name}/${toPosix(path.relative(repo.real, target))}`,
       detail: leftover ? 'leftover of an earlier run' : '',
-      bytes: planned.bytes,
+      bytes: planned.tree?.bytes ?? null,
       skip: planned.reason,
-      run: async () => {
-        const recheck = await check(true);
-
-        if (recheck.reason) {
-          return { ok: false, output: `${recheck.reason} (re-checked before deleting; kept)` };
-        }
-
-        return safeRemoveTree(target, repo.real);
-      },
+      run: () => removeRepoFolder(repo.real, target, { keepIf: keepIfFor(true) }),
     });
   }
 

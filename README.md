@@ -83,7 +83,7 @@ These rules apply to `nmclean`, `nminstall`, `devclean` and `npmrctoken`. `gpall
 
 `/var` is not on the list, because macOS keeps each user's temp folder there.
 
-**What may be deleted in a repo.** A folder is deleted only if all of these hold:
+**What may be deleted in a repo.** A folder is deleted only if all of these hold. Such a folder is a [repo folder](GLOSSARY.md).
 
 - its name is exactly an allow-listed one (`node_modules`, `.next`, `.turbo`, `.parcel-cache`, `coverage`, `dist`, `build`);
 - it sits next to a `package.json`;
@@ -92,6 +92,8 @@ These rules apply to `nmclean`, `nminstall`, `devclean` and `npmrctoken`. `gpall
 - it contains no nested `.git`.
 
 The search never enters dot-folders (`.venv`, `.yarn`, …), `node_modules` or nested repos.
+
+`nminstall` applies the same rules to an existing `node_modules`, because `npm ci` deletes it and Yarn rewrites it. A `node_modules` that fails a rule shows as kept in the dry run, and the repo is not installed.
 
 **Links.** Symlinks and junctions are removed as links. Their targets are never touched, and a folder reached through a link is never entered.
 
