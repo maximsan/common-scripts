@@ -235,7 +235,7 @@ async function isEntryPoint() {
     const [started, self] = await Promise.all([realpath(process.argv[1]), realpath(fileURLToPath(import.meta.url))]);
 
     // Case is ignored everywhere: Windows may report the same path in another case, and no two scripts
-    // differ only in case. This keeps gpall free of operating-system checks (see PLATFORM_RULES in devkit-core).
+    // differ only in case. This keeps gpall free of operating-system checks (see PLATFORM_RULES in core/platform.mjs).
     return started.toLowerCase() === self.toLowerCase();
   } catch {
     return false;

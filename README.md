@@ -10,7 +10,7 @@ Node.js scripts for the folder that holds your git repos. They run on Windows (b
 | `devclean.mjs` | periodic cleanup: stale `node_modules`, old build outputs, old temp-folder entries, npm/Yarn 1 caches; review-only report of agent files | dry run |
 | `npmrctoken.mjs` | puts a new registry token into the `_authToken=` line of every `.npmrc`, in repo folders and their package folders | dry run |
 
-`devkit-core.mjs` holds the shared safety checks and the plan → confirm → run flow of `nmclean`, `nminstall`, `devclean` and `npmrctoken`. `gpall` is standalone: it deletes nothing, so it needs none of those checks. All the scripts share these conventions:
+The shared code holds the safety checks and the plan → confirm → run flow of `nmclean`, `nminstall`, `devclean` and `npmrctoken`. Scripts import it only through `devkit-core.mjs`; the code itself is in `core/`, one file per area, each with its tests next to it. `gpall` is standalone: it deletes nothing, so it needs none of those checks. All the scripts share these conventions:
 
 - an optional bare number sets the number of parallel jobs;
 - an `ok`/`FAIL` line is printed per item as it finishes;
@@ -20,7 +20,7 @@ Node.js scripts for the folder that holds your git repos. They run on Windows (b
 
 ## Setup
 
-Copy `gpall.mjs`, `nmclean.mjs`, `nminstall.mjs`, `devclean.mjs`, `npmrctoken.mjs` and `devkit-core.mjs` into `~/scripts/`. The `*.test.mjs` files and `test-helpers.mjs` are only for running the tests. Then add these lines to your shell's startup file:
+Copy this folder to `~/scripts/`. The scripts need `devkit-core.mjs` and the `core/` folder next to them. The `*.test.mjs` files, `test-helpers.mjs` and the check tooling are only for running the tests. Then add these lines to your shell's startup file:
 
 - Git Bash on Windows, and most Linux shells: `~/.bashrc`;
 - macOS: `~/.zshrc`.
@@ -164,8 +164,8 @@ If the first `Test-Path` prints `False`, stop using the scripts and report the o
 
 **2. Shared core plus small scripts.**
 *Context:* several scripts need the same safety checks and run flow; copying them risks the copies drifting apart.
-*Decision:* `devkit-core.mjs` owns every check and the plan/confirm/run flow; each script only plans its items.
-*Consequences:* safety fixes land in one place, but the scripts must be copied together.
+*Decision:* the shared code owns every check and the plan/confirm/run flow; each script only plans its items. Scripts reach it through one interface, `devkit-core.mjs`; the implementation is split by area in `core/`.
+*Consequences:* safety fixes land in one place, but the scripts must be copied together with `devkit-core.mjs` and `core/`.
 
 **3. Dry run plus confirmation instead of a scheduled task.**
 *Context:* unattended deletion is the main risk, and a Cloud PC may not be running at a scheduled time.
@@ -179,7 +179,7 @@ If the first `Test-Path` prints `False`, stop using the scripts and report the o
 
 **5. One table for every difference between operating systems.**
 *Context:* Windows, macOS and Linux differ in path rules, protected folders, the temp folder, child processes and file ownership. Checks spread across the code were hard to find, and the Windows ones could only be tested on Windows.
-*Decision:* every difference is a field in `PLATFORM_RULES` in `devkit-core.mjs`, with one entry per system (see [platform rules](GLOSSARY.md)). Code reads the rules and never the system itself; lint rejects `process.platform` everywhere else. How to add a system or a new difference is written above the table.
+*Decision:* every difference is a field in `PLATFORM_RULES` in `core/platform.mjs`, with one entry per system (see [platform rules](GLOSSARY.md)). Code reads the rules and never the system itself; lint rejects `process.platform` everywhere else. How to add a system or a new difference is written above the table.
 *Consequences:* the Windows path rules are tested on macOS and Linux. A new difference between systems costs a field in every entry.
 
 ## Checks

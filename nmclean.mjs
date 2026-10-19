@@ -3,7 +3,7 @@
 // nmclean.mjs - delete node_modules in every git repo directly under the current folder,
 // including nested workspace packages. Dry run by default; see HELP below for usage.
 //
-// Each folder is deleted only if it passes every check in devkit-core.mjs (git-ignored, no tracked
+// Each folder is deleted only if it passes every check in core/deletion.mjs (git-ignored, no tracked
 // files, no links followed, ...). A failed folder never stops the run: every folder is attempted,
 // failures are listed at the end, and the exit code is 1 if any failed (2 if the run was refused).
 

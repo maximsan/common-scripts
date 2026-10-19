@@ -16,8 +16,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  assertSafeRoot, checkRepoFolder, errorCode, EXIT_OK, exists, findRepos, NODE_MODULES, PACKAGE_JSON, parseArgs,
-  planAndRun, removeRepoFolder, runMain, runShell, skippedItem, YARN_BERRY_MAJOR, yarnMajor,
+  assertSafeRoot, checkRepoFolder, errorCode, EXIT_OK, exists, findRepos, LINE_BREAK, NODE_MODULES, PACKAGE_JSON,
+  parseArgs, planAndRun, removeRepoFolder, runMain, runShell, skippedItem, TEXT_ENCODING, YARN_BERRY_MAJOR, yarnMajor,
 } from './devkit-core.mjs';
 
 const DEFAULT_INSTALL_JOBS = 1; // installs compete for disk and network; one at a time by default
@@ -25,8 +25,6 @@ const INSTALL_TIMEOUT_MS = 20 * 60 * 1000;
 const MS_PER_SECOND = 1000;
 const OUTPUT_TAIL_LINES = 25;
 const YARN_CONFIG = '.yarnrc.yml';
-const TEXT_ENCODING = 'utf8';
-const LINE_BREAK = /\r?\n/;
 const PACKAGE_MANAGER_FIELD = /^([a-z]+)@(\d+)/; // "yarn@4.5.0+sha512..." -> name "yarn", major "4"
 const SUPPORTED_MANAGERS = ['npm', 'yarn'];
 

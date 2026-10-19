@@ -11,12 +11,11 @@ import { lstat, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   assertSafeRoot, errorCode, EXIT_OK, findPackageFiles, findRepos, mapPool, parseArgs, planAndRun, runMain, SafetyError,
-  skippedItem, toPosix,
+  skippedItem, TEXT_ENCODING, toPosix,
 } from './devkit-core.mjs';
 
 const NPMRC = '.npmrc';
 const AUTH_TOKEN_KEY = '_authToken';
-const TEXT_ENCODING = 'utf8';
 const OPTION_PREFIX = '-';
 const DEFAULT_REGISTRY = '(default registry)'; // a bare "_authToken=" line names no registry
 

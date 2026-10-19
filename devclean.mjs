@@ -16,8 +16,9 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import {
   ageInDays, assertSafeRoot, DAY_MS, DEFAULT_JOBS, EXIT_OK, exists, findRepos, formatBytes, git, GIT_FOLDER,
-  HOST_RULES, lastLine, measure, NODE_MODULES, parseArgs, planAndRun, planFolders, readState, resolveTempDir,
-  runMain, runShell, safeRemoveOldFile, safeRemoveTree, skippedItem, writeState, YARN_BERRY_MAJOR, yarnMajor,
+  HOST_RULES, lastLine, measure, NODE_MODULES, NUL, parseArgs, planAndRun, planFolders, readState, resolveTempDir,
+  runMain, runShell, safeRemoveOldFile, safeRemoveTree, skippedItem, TEXT_ENCODING, writeState, YARN_BERRY_MAJOR,
+  yarnMajor,
 } from './devkit-core.mjs';
 
 export const SECTIONS = Object.freeze(['node_modules', 'build', 'temp', 'cache']);
@@ -32,8 +33,6 @@ const CACHE_TIMEOUT_MS = 10 * 60 * 1000;
 const UNTRACKED_SHOWN_PER_REPO = 10;
 const AGE_COLUMN_WIDTH = 5;
 const SIZE_COLUMN_WIDTH = 9;
-const TEXT_ENCODING = 'utf8';
-const NUL = '\0';
 
 const CLAUDE_FOLDER = '.claude';
 const CLAUDE_SETTINGS = 'settings.json';
