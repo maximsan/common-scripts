@@ -16,7 +16,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import {
   ageInDays, assertSafeRoot, DAY_MS, DEFAULT_JOBS, EXIT_OK, exists, findRepos, formatBytes, git, GIT_FOLDER,
-  IS_WINDOWS, lastLine, measure, NODE_MODULES, parseArgs, planAndRun, planFolders, readState, resolveTempDir,
+  HOST_RULES, lastLine, measure, NODE_MODULES, parseArgs, planAndRun, planFolders, readState, resolveTempDir,
   runMain, runShell, safeRemoveOldFile, safeRemoveTree, skippedItem, writeState, YARN_BERRY_MAJOR, yarnMajor,
 } from './devkit-core.mjs';
 
@@ -137,7 +137,7 @@ export function planBuildOutputs(repos, { buildDays, jobs = DEFAULT_JOBS, now = 
  * @param {import('node:fs').Stats} info  the entry's lstat result
  * @returns {boolean} whether it may be deleted on ownership grounds
  */
-const ownedByMe = (info) => IS_WINDOWS || info.uid === process.getuid?.();
+const ownedByMe = (info) => !HOST_RULES.fileOwners || info.uid === process.getuid?.();
 
 /**
  * Top-level temp-folder entries with nothing newer than `tempDays`. Links and other users' entries are

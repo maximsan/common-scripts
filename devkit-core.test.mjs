@@ -7,13 +7,16 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, renameSync, symlinkSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import {
-  assertSafeRoot, checkRepoFolder, findNamedDirs, findRepos, IS_WINDOWS, isInside, NODE_MODULES, parseArgs,
-  planAndRun, planFolders, processTree, removeRepoFolder, resolveTempDir, runItems, runShell, safeRemoveTree,
-  SafetyError, skippedItem, trashBase,
+  assertSafeRoot, checkRepoFolder, childEnv, findNamedDirs, findRepos, HOST_RULES, isInside, NODE_MODULES,
+  parseArgs, planAndRun, planFolders, platformRules, processTree, protectedFolders, removeRepoFolder,
+  resolveTempDir, rootProblems, runItems, runShell, safeRemoveTree, SafetyError, samePath, skippedItem, trashBase,
 } from './devkit-core.mjs';
 import { git, makeRepo, tempWorkspace, testContext, write } from './test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('devkit-core');
+const WINDOWS = platformRules('win32');
+const MACOS = platformRules('darwin');
+const ON_WINDOWS = HOST_RULES.name === 'win32';
 
 after(cleanup);
 
@@ -41,13 +44,44 @@ test('isInside: strict containment only', () => {
   assert.equal(isInside('/a/b', '/a/b/..foo'), true); // a folder literally named "..foo"
 });
 
+test('Windows rules: paths ignore letter case and drives differ', () => {
+  assert.equal(samePath('C:\\Repos\\App', 'c:\\repos\\app', WINDOWS), true);
+  assert.equal(isInside('C:\\Repos', 'c:\\repos\\app', WINDOWS), true);
+  assert.equal(isInside('C:\\Repos', 'D:\\Repos\\app', WINDOWS), false);
+  assert.equal(samePath('/Users/me/App', '/users/me/app', MACOS), false);
+});
+
+test('Windows rules: drive roots, network paths, home and protected folders are refused', () => {
+  const env = { SystemRoot: 'C:\\Windows', APPDATA: 'C:\\Users\\me\\AppData\\Roaming' };
+  const folders = protectedFolders(WINDOWS, { home: 'C:\\Users\\me', env });
+  const where = { homeReal: 'C:\\Users\\me', folders, rules: WINDOWS };
+
+  assert.deepEqual(folders, [['SystemRoot', 'C:\\Windows'], ['APPDATA', 'C:\\Users\\me\\AppData\\Roaming']]);
+  assert.match(rootProblems('C:\\', where).join(), /drive or filesystem root/);
+  assert.match(rootProblems('\\\\server\\share\\repos', where).join(), /network/);
+  assert.match(rootProblems('c:\\users\\ME', where).join(), /home folder/);
+  assert.match(rootProblems('c:\\windows\\system32', where).join(), /inside SystemRoot/);
+  assert.deepEqual(rootProblems('C:\\Users\\me\\repos', where), []);
+});
+
+test('platform rules: temp folder locations and the child PATH', () => {
+  assert.deepEqual(WINDOWS.tempHomes('C:\\Users\\me'), ['C:\\Users\\me\\AppData\\Local\\Temp']);
+  assert.deepEqual(MACOS.tempHomes('/Users/me'), ['/private/var/folders', '/private/tmp']);
+
+  const env = { PATH: `.${MACOS.paths.delimiter}/usr/bin`, GIT_DIR: '/elsewhere/.git' };
+
+  assert.equal(childEnv(env, MACOS).PATH, '/usr/bin');
+  assert.equal(childEnv(env, MACOS).GIT_DIR, undefined);
+  assert.equal(childEnv({ PATH: '.;C:\\Tools' }, WINDOWS).PATH, '.;C:\\Tools');
+});
+
 test('assertSafeRoot refuses filesystem root, home and AppData', async () => {
   await assert.rejects(assertSafeRoot('/'), SafetyError);
 
   const home = join(workspace, 'home');
   const appdata = join(workspace, 'appdata');
   const work = join(workspace, 'work');
-  const windowsEnv = { home, env: { LOCALAPPDATA: appdata }, windows: true };
+  const windowsEnv = { home, env: { LOCALAPPDATA: appdata }, rules: WINDOWS };
 
   for (const dir of [home, join(appdata, 'x'), work]) {
     mkdirSync(dir, { recursive: true });
@@ -59,7 +93,7 @@ test('assertSafeRoot refuses filesystem root, home and AppData', async () => {
 });
 
 test('assertSafeRoot on macOS and Linux refuses system folders and app data in the home folder', {
-  skip: IS_WINDOWS,
+  skip: ON_WINDOWS,
 }, async () => {
   const home = join(workspace, 'unix-home');
 
@@ -72,10 +106,13 @@ test('assertSafeRoot on macOS and Linux refuses system folders and app data in t
 
 test('resolveTempDir accepts the system temp folder and refuses anything else', async () => {
   assert.ok(await resolveTempDir());
-  await assert.rejects(resolveTempDir({ temp: workspace, home: workspace, platform: 'win32' }), /expected/);
-  await assert.rejects(resolveTempDir({ temp: join(workspace, '..'), platform: 'freebsd' }), /no known temp folder/);
+  await assert.rejects(resolveTempDir({ temp: workspace, home: workspace, rules: WINDOWS }), /expected/);
+  await assert.rejects(
+    resolveTempDir({ temp: join(workspace, '..'), rules: platformRules('freebsd') }),
+    /no known temp folder on freebsd/,
+  );
 
-  if (!IS_WINDOWS) {
+  if (!ON_WINDOWS) {
     await assert.rejects(resolveTempDir({ temp: '/usr' }), /expected/);
   }
 });
@@ -88,7 +125,7 @@ test('processTree lists a process and all its descendants, parents first', () =>
 });
 
 test('a timed-out command is killed together with the processes it started', {
-  skip: IS_WINDOWS && 'uses sh syntax; taskkill is covered by the Windows check',
+  skip: ON_WINDOWS && 'uses sh syntax; taskkill is covered by the Windows check',
 }, async () => {
   const result = await runShell('sleep 30 & echo $!; wait', { timeout: 500 });
 
@@ -118,7 +155,7 @@ test('a timed-out command is killed together with the processes it started', {
 });
 
 test('npm planted in the current folder never runs, even with "." in PATH', {
-  skip: IS_WINDOWS && 'Windows uses NoDefaultCurrentDirectoryInExePath',
+  skip: ON_WINDOWS && 'Windows uses NoDefaultCurrentDirectoryInExePath',
 }, async () => {
   const dir = join(workspace, 'planted');
 
@@ -130,10 +167,7 @@ test('npm planted in the current folder never runs, even with "." in PATH', {
   process.env.PATH = `.${delimiter}${previous}`;
 
   try {
-    // CHILD_ENV is built when devkit-core loads, so load a fresh copy while PATH is set.
-    const { runShell: freshRunShell } = await import(`./devkit-core.mjs?path=${Date.now()}`);
-
-    assert.doesNotMatch((await freshRunShell('npm --version', { cwd: dir })).output, /planted/);
+    assert.doesNotMatch((await runShell('npm --version', { cwd: dir })).output, /planted/);
   } finally {
     process.env.PATH = previous;
   }
@@ -286,9 +320,7 @@ test('checkRepoFolder ignores GIT_DIR / GIT_INDEX_FILE inherited from the parent
   process.env.GIT_DIR = join(other, '.git'); // would make ls-files read the wrong repo
 
   try {
-    // CHILD_ENV is built when devkit-core loads, so load a fresh copy while GIT_DIR is set.
-    const { checkRepoFolder: freshCheck } = await import(`./devkit-core.mjs?env=${Date.now()}`);
-    const { reason } = await freshCheck(tracked, join(tracked, NODE_MODULES));
+    const { reason } = await checkRepoFolder(tracked, join(tracked, NODE_MODULES));
 
     assert.match(String(reason), /tracked/);
   } finally {

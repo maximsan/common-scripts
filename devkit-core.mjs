@@ -56,7 +56,6 @@ import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------- settings
 
-export const IS_WINDOWS = process.platform === 'win32';
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_JOBS = 4;
 export const NODE_MODULES = 'node_modules';
@@ -90,24 +89,6 @@ const UNIX_STATE_PARENT = ['.local', 'state'];
 const TRASH_TAG = '.devkit-deleting-';
 const TRASH_STAMP = /^\d{13}$/;
 
-// Folders the scripts must never run inside. Windows: named by environment variables.
-const PROTECTED_FOLDER_VARS = [
-  'SystemRoot', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramData', 'APPDATA', 'LOCALAPPDATA',
-];
-// macOS and Linux: system folders, and app data inside the home folder. /var is left out on purpose:
-// macOS keeps each user's temp folder under it.
-const PROTECTED_SYSTEM_FOLDERS = [
-  '/bin', '/boot', '/dev', '/etc', '/lib', '/lib32', '/lib64', '/opt', '/proc', '/run', '/sbin', '/sys', '/usr',
-  '/Applications', '/Library', '/System',
-];
-const PROTECTED_HOME_FOLDERS = ['Library', '.cache', '.config', '.local'];
-const NETWORK_PATH_PREFIXES = ['\\\\', '//'];
-
-// Where the user temp folder may be, since devclean deletes its old entries. Subfolders also count.
-const WINDOWS_TEMP_IN_HOME = ['AppData', 'Local', 'Temp'];
-/** @type {Partial<Record<NodeJS.Platform, string[]>>} */
-const UNIX_TEMP_HOMES = { darwin: ['/private/var/folders', '/private/tmp'], linux: ['/tmp', '/var/tmp'] };
-
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 const BYTES_PER_UNIT = 1024;
 const DIRECTORY_LINK_CODES = ['EPERM', 'EISDIR', 'EACCES']; // unlink refused: it is a directory link, use rmdir
@@ -131,23 +112,132 @@ const SCRIPT_ARGS_START = 2; // process.argv holds node and the script path firs
 const GIT_SAFE_FLAGS = ['--no-optional-locks', '-c', 'core.fsmonitor=false'];
 const GIT_ENV_PREFIX = 'GIT_';
 const YARN_VERSION_COMMAND = 'yarn --version';
-// Ending a process tree: Windows names the root, macOS and Linux list every process with its parent.
+// Ending a process tree (see treeKill in the platform rules).
 const TASKKILL = 'taskkill';
 const PROCESS_LIST = ['ps', ['-A', '-o', 'pid=', '-o', 'ppid=']];
 const KILL_SIGNAL = 'SIGKILL';
 
-// No GIT_DIR / GIT_INDEX_FILE / ... overrides from the parent shell, no prompts, and no npm / yarn planted
-// in the current folder: cmd.exe is told not to search it, and elsewhere PATH keeps only absolute folders
-// (an empty entry or "." would mean the current folder).
-const ABSOLUTE_PATH = (process.env.PATH ?? '').split(path.delimiter).filter((dir) => path.isAbsolute(dir));
-const CHILD_ENV = {
-  ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.toUpperCase().startsWith(GIT_ENV_PREFIX))),
-  GIT_TERMINAL_PROMPT: '0',
-  NoDefaultCurrentDirectoryInExePath: '1',
-  ...(IS_WINDOWS ? {} : { PATH: ABSOLUTE_PATH.join(path.delimiter) }),
-};
 // Neutral working directory for git (repo paths go through -C): Node's own install folder.
 const NEUTRAL_CWD = path.dirname(process.execPath);
+
+// ---------------------------------------------------------------- platform rules
+
+/**
+ * How one operating system works, for every behaviour that differs between systems. See "platform rules"
+ * in GLOSSARY.md.
+ *
+ * PLATFORM_RULES below is the only place where devkit may depend on the operating system. Lint rejects
+ * process.platform everywhere else. To change behaviour:
+ * - support another system: add an entry to PLATFORM_RULES, keyed by its process.platform name, with every
+ *   field below; systems without an entry get UNIX_RULES;
+ * - change how one system behaves: edit the field in its entry;
+ * - add a new difference between systems: add a field to this type, set it in every entry, and read it
+ *   from the rules (HOST_RULES, or a `rules` argument). Name the field after the behaviour, never after a
+ *   system: `treeKill: 'taskkill'`, not `isWindows`.
+ *
+ * Real runs always use HOST_RULES, the rules of the machine they run on. Functions that touch no disk also
+ * take a `rules` argument, so tests can check another system's entry: the Windows rules are tested on
+ * macOS and Linux this way, where the tests run.
+ *
+ * Fields:
+ * - name: the process.platform name, shown in messages;
+ * - paths: the path syntax (drive letters and backslashes, or plain slashes);
+ * - ignoreCase: paths that differ only in letter case name the same folder;
+ * - networkPrefixes: starts of a network path, where the scripts refuse to run;
+ * - protectedEnvVars: environment variables naming folders the scripts must never run inside;
+ * - protectedSystemFolders: absolute folders the scripts must never run inside;
+ * - protectedHomeFolders: folders inside the home folder the scripts must never run inside;
+ * - tempHomes: where the user temp folder may be (devclean deletes old entries there); subfolders count;
+ * - onlyAbsolutePath: child processes get a PATH with only absolute folders, so an empty entry or "."
+ *   can't make them run an npm or yarn planted in the current folder;
+ * - treeKill: how to end a child and everything it started: taskkill, or a ps listing plus kill;
+ * - fileOwners: files have an owning user id, so a shared temp folder can hold other users' entries.
+ * @typedef {{
+ *   name: string,
+ *   paths: import('node:path').PlatformPath,
+ *   ignoreCase: boolean,
+ *   networkPrefixes: string[],
+ *   protectedEnvVars: string[],
+ *   protectedSystemFolders: string[],
+ *   protectedHomeFolders: string[],
+ *   tempHomes: (home: string) => string[],
+ *   onlyAbsolutePath: boolean,
+ *   treeKill: 'taskkill' | 'ps',
+ *   fileOwners: boolean,
+ * }} PlatformRules
+ */
+
+/** @type {Omit<PlatformRules, 'name' | 'tempHomes'>} */
+const UNIX_BASE = {
+  paths: path.posix,
+  ignoreCase: false,
+  networkPrefixes: ['//'],
+  protectedEnvVars: [],
+  // /var is left out on purpose: macOS keeps each user's temp folder under it.
+  protectedSystemFolders: [
+    '/bin', '/boot', '/dev', '/etc', '/lib', '/lib32', '/lib64', '/opt', '/proc', '/run', '/sbin', '/sys', '/usr',
+    '/Applications', '/Library', '/System',
+  ],
+  protectedHomeFolders: ['Library', '.cache', '.config', '.local'],
+  onlyAbsolutePath: true,
+  treeKill: 'ps',
+  fileOwners: true,
+};
+
+/** Rules for a system without its own entry: Unix behaviour, and no known temp folder. */
+const UNIX_RULES = { ...UNIX_BASE, name: 'unix', tempHomes: () => [] };
+
+/** @type {Readonly<Record<string, PlatformRules>>} */
+const PLATFORM_RULES = Object.freeze({
+  win32: {
+    name: 'win32',
+    paths: path.win32,
+    ignoreCase: true,
+    networkPrefixes: ['\\\\', '//'],
+    protectedEnvVars: ['SystemRoot', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramData', 'APPDATA', 'LOCALAPPDATA'],
+    protectedSystemFolders: [],
+    protectedHomeFolders: [],
+    tempHomes: (home) => [path.win32.join(home, 'AppData', 'Local', 'Temp')],
+    onlyAbsolutePath: false, // cmd.exe is told not to search the current folder instead
+    treeKill: 'taskkill',
+    fileOwners: false,
+  },
+  darwin: { ...UNIX_BASE, name: 'darwin', tempHomes: () => ['/private/var/folders', '/private/tmp'] },
+  linux: { ...UNIX_BASE, name: 'linux', tempHomes: () => ['/tmp', '/var/tmp'] },
+});
+
+/**
+ * The rules of one operating system.
+ * @param {string} platform  a process.platform name, e.g. "win32"
+ * @returns {PlatformRules} its entry in PLATFORM_RULES, or the Unix rules under its name
+ */
+export const platformRules = (platform) => PLATFORM_RULES[platform] ?? { ...UNIX_RULES, name: platform };
+
+// The one place that reads the operating system; everything else uses these rules.
+// eslint-disable-next-line no-restricted-syntax
+export const HOST_RULES = platformRules(process.platform);
+
+/**
+ * The environment for a child process: no GIT_DIR / GIT_INDEX_FILE / ... overrides from the parent shell,
+ * no credential prompts, and no npm or yarn planted in the current folder (cmd.exe is told not to search
+ * it; with onlyAbsolutePath, PATH keeps only absolute folders).
+ * @param {NodeJS.ProcessEnv} env  the parent's environment
+ * @param {PlatformRules} [rules]  the system's rules
+ * @returns {NodeJS.ProcessEnv} the child's environment
+ */
+export function childEnv(env, rules = HOST_RULES) {
+  const kept = Object.entries(env).filter(([name]) => !name.toUpperCase().startsWith(GIT_ENV_PREFIX));
+  /** @type {NodeJS.ProcessEnv} */
+  const result = { ...Object.fromEntries(kept), GIT_TERMINAL_PROMPT: '0', NoDefaultCurrentDirectoryInExePath: '1' };
+
+  if (rules.onlyAbsolutePath) {
+    const { delimiter, isAbsolute } = rules.paths;
+
+    result.PATH = (env.PATH ?? '').split(delimiter).filter((dir) => isAbsolute(dir)).join(delimiter);
+  }
+
+  return result;
+}
 
 /** A refusal: the run stops before changing anything, exit code 2. */
 export class SafetyError extends Error {}
@@ -169,19 +259,25 @@ const errorText = (err) => errorCode(err) ?? (err instanceof Error ? err.message
 // ---------------------------------------------------------------- paths
 
 /**
- * Absolute form of a path, lower-cased on Windows where paths ignore case.
+ * Absolute form of a path, lower-cased where the system ignores letter case.
  * @param {string} anyPath  relative or absolute path
+ * @param {PlatformRules} rules  the system's rules
  * @returns {string} the path ready for comparing
  */
-const normalize = (anyPath) => (IS_WINDOWS ? path.resolve(anyPath).toLowerCase() : path.resolve(anyPath));
+function normalize(anyPath, rules) {
+  const resolved = rules.paths.resolve(anyPath);
+
+  return rules.ignoreCase ? resolved.toLowerCase() : resolved;
+}
 
 /**
- * True when two paths name the same place after resolving; case-insensitive on Windows.
+ * True when two paths name the same place after resolving.
  * @param {string} first  one path
  * @param {string} second  the other path
+ * @param {PlatformRules} [rules]  the system's rules
  * @returns {boolean} whether they are the same
  */
-export const samePath = (first, second) => normalize(first) === normalize(second);
+export const samePath = (first, second, rules = HOST_RULES) => normalize(first, rules) === normalize(second, rules);
 
 /**
  * True if anything (file, folder or link) exists at a path.
@@ -205,27 +301,31 @@ export const toPosix = (relativePath) => relativePath.split(path.sep).join('/');
 const realpathOrResolve = (target) => realpath(target).catch(() => path.resolve(target));
 
 /**
- * True when `child` is strictly inside `parent` (Windows: case-insensitive).
+ * True when `child` is strictly inside `parent`.
  * @param {string} parent  the outer folder
  * @param {string} child  the path to test
+ * @param {PlatformRules} [rules]  the system's rules
  * @returns {boolean} whether `child` is below `parent`
  */
-export function isInside(parent, child) {
-  const relativePath = path.relative(normalize(parent), normalize(child));
+export function isInside(parent, child, rules = HOST_RULES) {
+  const { relative, sep, isAbsolute } = rules.paths;
+  const relativePath = relative(normalize(parent, rules), normalize(child, rules));
 
   return relativePath !== ''
     && relativePath !== '..'
-    && !relativePath.startsWith(`..${path.sep}`)
-    && !path.isAbsolute(relativePath);
+    && !relativePath.startsWith(`..${sep}`)
+    && !isAbsolute(relativePath);
 }
 
 /**
  * True when `child` is `folder` itself or inside it.
  * @param {string} folder  the outer folder
  * @param {string} child  the path to test
+ * @param {PlatformRules} [rules]  the system's rules
  * @returns {boolean} whether `child` is `folder` or below it
  */
-const isAtOrInside = (folder, child) => samePath(folder, child) || isInside(folder, child);
+const isAtOrInside = (folder, child, rules = HOST_RULES) => samePath(folder, child, rules)
+  || isInside(folder, child, rules);
 
 /**
  * Original name of a folder that devkit renamed for deletion, e.g.
@@ -244,72 +344,83 @@ export function trashBase(name) {
 }
 
 /**
- * Folders the scripts must never run inside.
- * @param {string} homeReal  the resolved home folder
- * @param {NodeJS.ProcessEnv} env  environment holding the Windows folder variables
- * @param {boolean} windows  which platform's list to use
- * @returns {Promise<[string, string][]>} [label for the message, resolved path] pairs
+ * Folders the scripts must never run inside, as the rules name them (not yet resolved).
+ * @param {PlatformRules} rules  the system's rules
+ * @param {{ home: string, env: NodeJS.ProcessEnv }} where  the home folder and the environment
+ * @returns {[string, string][]} [label for the message, path] pairs
  */
-async function protectedFolders(homeReal, env, windows) {
+export function protectedFolders(rules, { home, env }) {
   /** @type {[string, string][]} */
   const named = [];
 
-  if (windows) {
-    for (const name of PROTECTED_FOLDER_VARS) {
-      const value = env[name];
+  for (const name of rules.protectedEnvVars) {
+    const value = env[name];
 
-      if (value) {
-        named.push([name, value]);
-      }
-    }
-  } else {
-    for (const dir of PROTECTED_SYSTEM_FOLDERS) {
-      named.push([dir, dir]);
-    }
-
-    for (const name of PROTECTED_HOME_FOLDERS) {
-      named.push([`~/${name}`, path.join(homeReal, name)]);
+    if (value) {
+      named.push([name, value]);
     }
   }
 
-  /** @type {[string, string][]} */
-  const resolved = [];
-
-  for (const [label, dir] of named) {
-    resolved.push([label, await realpathOrResolve(dir)]);
+  for (const dir of rules.protectedSystemFolders) {
+    named.push([dir, dir]);
   }
 
-  return resolved;
+  for (const name of rules.protectedHomeFolders) {
+    named.push([`~/${name}`, rules.paths.join(home, name)]);
+  }
+
+  return named;
+}
+
+/**
+ * Why a resolved folder is a dangerous place to run in. Touches no disk, so tests can pass another
+ * system's rules.
+ * @param {string} rootReal  the resolved folder
+ * @param {{ homeReal: string, folders: [string, string][], rules?: PlatformRules }} context
+ *   the resolved home folder, the resolved protected folders, and the system's rules
+ * @returns {string[]} the problems; empty when it is safe
+ */
+export function rootProblems(rootReal, { homeReal, folders, rules = HOST_RULES }) {
+  const problems = [];
+
+  if (rules.networkPrefixes.some((prefix) => rootReal.startsWith(prefix))) {
+    problems.push('it is a network (UNC) path');
+  }
+
+  if (rules.paths.parse(rootReal).root === rootReal) {
+    problems.push('it is a drive or filesystem root');
+  }
+
+  if (samePath(rootReal, homeReal, rules)) {
+    problems.push('it is your home folder');
+  }
+
+  for (const [label, folder] of folders) {
+    if (isAtOrInside(folder, rootReal, rules)) {
+      problems.push(`it is inside ${label}${label === folder ? '' : ` (${folder})`}`);
+    }
+  }
+
+  return problems;
 }
 
 /**
  * Resolve the folder a script runs in. Throws SafetyError when it is a dangerous place.
  * @param {string} root  the folder to check, usually the current folder
- * @param {{ home?: string, env?: NodeJS.ProcessEnv, windows?: boolean }} [options]  injectable for tests
+ * @param {{ home?: string, env?: NodeJS.ProcessEnv, rules?: PlatformRules }} [options]  injectable for tests
  * @returns {Promise<string>} resolved root
  */
-export async function assertSafeRoot(root, { home = homedir(), env = process.env, windows = IS_WINDOWS } = {}) {
+export async function assertSafeRoot(root, { home = homedir(), env = process.env, rules = HOST_RULES } = {}) {
   const real = await realpath(root);
   const homeReal = await realpathOrResolve(home);
-  const problems = [];
+  /** @type {[string, string][]} */
+  const folders = [];
 
-  if (NETWORK_PATH_PREFIXES.some((prefix) => real.startsWith(prefix))) {
-    problems.push('it is a network (UNC) path');
+  for (const [label, dir] of protectedFolders(rules, { home: homeReal, env })) {
+    folders.push([label, await realpathOrResolve(dir)]);
   }
 
-  if (path.parse(real).root === real) {
-    problems.push('it is a drive or filesystem root');
-  }
-
-  if (samePath(real, homeReal)) {
-    problems.push('it is your home folder');
-  }
-
-  for (const [label, folder] of await protectedFolders(homeReal, env, windows)) {
-    if (isAtOrInside(folder, real)) {
-      problems.push(`it is inside ${label}${label === folder ? '' : ` (${folder})`}`);
-    }
-  }
+  const problems = rootProblems(real, { homeReal, folders, rules });
 
   if (problems.length) {
     throw new SafetyError(`Refusing to run in ${real}: ${problems.join('; ')}.`);
@@ -319,23 +430,21 @@ export async function assertSafeRoot(root, { home = homedir(), env = process.env
 }
 
 /**
- * The user temp folder, accepted only where the system normally keeps it: %USERPROFILE%\AppData\Local\Temp
- * on Windows, /private/var/folders or /private/tmp on macOS, /tmp or /var/tmp on Linux, or a subfolder.
- * @param {{ temp?: string, home?: string, platform?: NodeJS.Platform }} [options]  injectable for tests
+ * The user temp folder, accepted only where the rules' tempHomes put it, or in a subfolder.
+ * @param {{ temp?: string, home?: string, rules?: PlatformRules }} [options]  injectable for tests
  * @returns {Promise<string>} resolved temp folder
  */
-export async function resolveTempDir({ temp = tmpdir(), home = homedir(), platform = process.platform } = {}) {
+export async function resolveTempDir({ temp = tmpdir(), home = homedir(), rules = HOST_RULES } = {}) {
   const real = await realpath(temp);
-  const homes = platform === 'win32' ? [path.join(home, ...WINDOWS_TEMP_IN_HOME)] : (UNIX_TEMP_HOMES[platform] ?? []);
-  const allowed = await Promise.all(homes.map(realpathOrResolve));
+  const allowed = await Promise.all(rules.tempHomes(home).map(realpathOrResolve));
 
-  if (allowed.some((folder) => isAtOrInside(folder, real))) {
+  if (allowed.some((folder) => isAtOrInside(folder, real, rules))) {
     return real;
   }
 
   const expected = allowed.length
     ? `expected ${allowed.join(' or ')} or a subfolder`
-    : `no known temp folder on ${platform}`;
+    : `no known temp folder on ${rules.name}`;
 
   throw new SafetyError(`TEMP is ${real}, ${expected}; temp cleanup skipped.`);
 }
@@ -356,7 +465,7 @@ export async function resolveTempDir({ temp = tmpdir(), home = homedir(), platfo
  * @returns {import('node:child_process').ExecOptionsWithStringEncoding} options for exec and execFile
  */
 const childOptions = (cwd) => ({
-  cwd, env: CHILD_ENV, windowsHide: true, maxBuffer: MAX_OUTPUT_BYTES, encoding: TEXT_ENCODING,
+  cwd, env: childEnv(process.env), windowsHide: true, maxBuffer: MAX_OUTPUT_BYTES, encoding: TEXT_ENCODING,
 });
 
 /**
@@ -398,7 +507,7 @@ function killTree(child) {
     return;
   }
 
-  if (IS_WINDOWS) {
+  if (HOST_RULES.treeKill === 'taskkill') {
     execFile(TASKKILL, ['/pid', String(pid), '/T', '/F'], () => {});
 
     return;

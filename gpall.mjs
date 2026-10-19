@@ -223,7 +223,7 @@ async function main(argv) {
 
 /**
  * True when node was started with this file, also through a symlink or a differently spelled path
- * (real paths come back in the on-disk letter case; Windows drive letters are compared case-insensitively).
+ * (real paths are compared ignoring letter case).
  * @returns {Promise<boolean>} whether this file is the script node runs
  */
 async function isEntryPoint() {
@@ -234,7 +234,9 @@ async function isEntryPoint() {
   try {
     const [started, self] = await Promise.all([realpath(process.argv[1]), realpath(fileURLToPath(import.meta.url))]);
 
-    return process.platform === 'win32' ? started.toLowerCase() === self.toLowerCase() : started === self;
+    // Case is ignored everywhere: Windows may report the same path in another case, and no two scripts
+    // differ only in case. This keeps gpall free of operating-system checks (see PLATFORM_RULES in devkit-core).
+    return started.toLowerCase() === self.toLowerCase();
   } catch {
     return false;
   }

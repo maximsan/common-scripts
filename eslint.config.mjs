@@ -29,6 +29,15 @@ const NO_INLINE_VALUES = [
   },
 ];
 
+// Every difference between operating systems is read from the platform rules (PLATFORM_RULES in
+// devkit-core.mjs), never from the system directly. Only the line that builds HOST_RULES reads it.
+const PLATFORM_MESSAGE = 'Read operating-system differences from PLATFORM_RULES in devkit-core.mjs.';
+const NO_PLATFORM_CHECKS = [
+  { selector: 'MemberExpression[object.name="process"][property.name="platform"]', message: PLATFORM_MESSAGE },
+  { selector: 'ImportSpecifier[imported.name="platform"]', message: PLATFORM_MESSAGE },
+  { selector: 'CallExpression[callee.property.name="platform"]', message: PLATFORM_MESSAGE },
+];
+
 // Blank lines separate the logical parts of a function: declarations, blocks, and the final return.
 const PADDING_LINES = [
   { blankLine: 'always', prev: ['const', 'let'], next: '*' },
@@ -66,7 +75,7 @@ export default [
 
       'id-length': ['error', { min: MIN_NAME_LENGTH, properties: 'never' }],
       'id-denylist': ['error', ...UNCLEAR_NAMES],
-      'no-restricted-syntax': ['error', ...NO_INLINE_VALUES],
+      'no-restricted-syntax': ['error', ...NO_INLINE_VALUES, ...NO_PLATFORM_CHECKS],
 
       // Every named function has a doc comment: declarations and functions stored in a constant.
       // Inline callbacks are described by the code around them.
@@ -82,6 +91,6 @@ export default [
   {
     // Tests keep fixture values and expected-output patterns inline, where they read best.
     files: ['**/*.test.mjs'],
-    rules: { 'no-restricted-syntax': 'off' },
+    rules: { 'no-restricted-syntax': ['error', ...NO_PLATFORM_CHECKS] },
   },
 ];
