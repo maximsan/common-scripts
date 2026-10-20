@@ -1,11 +1,13 @@
 // @ts-check
-// core/deletion.mjs - deleting folders and files without following links, and the repo-folder rule.
+// core/deletion.mjs - deleting folders and files without following links, and the rules for repo folders and
+// temp entries.
 
 import { chmod, lstat, readdir, rename, rmdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { EXIT_FAILED, NUL, TRASH_TAG } from './constants.mjs';
 import { measure } from './discovery.mjs';
 import { errorCode, errorText } from './errors.mjs';
+import { HOST_RULES } from './platform.mjs';
 import { isInside, toPosix, trashBase, validateTarget } from './paths.mjs';
 import { git } from './processes.mjs';
 
@@ -189,29 +191,86 @@ export async function safeRemoveTree(target, boundaryReal) {
 }
 
 /**
- * Delete one file inside `boundaryReal` if it is still older than `cutoffMs`. Never rejects.
- * @param {string} file  file to delete
- * @param {string} boundaryReal  resolved folder the file must be inside
- * @param {number} cutoffMs  the file is kept if modified at or after this time
- * @returns {Promise<RunResult>} ok, or why it was kept
+ * True when the current user owns the entry. On a shared temp folder (Linux /tmp) other users' entries
+ * are kept. Windows reports no owner here; its temp folder is per user anyway.
+ * @param {import('node:fs').Stats} info  the entry's lstat result
+ * @returns {boolean} whether it may be deleted on ownership grounds
  */
-export async function safeRemoveOldFile(file, boundaryReal, cutoffMs) {
+const ownedByMe = (info) => !HOST_RULES.fileOwners || info.uid === process.getuid?.();
+
+/**
+ * Whether a temp entry (see GLOSSARY.md) may be deleted, applying every rule in README "Temp folder": it is
+ * a file or a folder, not a link, yours, and nothing in it changed at or after `cutoffMs`. Never rejects.
+ * @param {string} tempReal  resolved temp folder
+ * @param {string} entry  file or folder directly inside it
+ * @param {number} cutoffMs  the entry is kept if anything in it changed at or after this time
+ * @returns {Promise<{ reason: string | null, bytes: number | null, isFolder: boolean }>}
+ *   why it must be kept (null: it may go), its size, and whether it is a folder
+ */
+export async function checkTempEntry(tempReal, entry, cutoffMs) {
+  /**
+   * The result for an entry that must be kept.
+   * @param {string} reason  why it is kept
+   * @returns {{ reason: string, bytes: null, isFolder: boolean }} the result
+   */
+  const kept = (reason) => ({ reason, bytes: null, isFolder: false });
+
   try {
-    const info = await lstat(file);
+    const info = await lstat(entry);
 
-    if (info.isSymbolicLink() || !info.isFile()) {
-      return { ok: false, output: 'changed since planning (kept)' };
+    if (info.isSymbolicLink()) {
+      return kept('is a symlink/junction (left alone)');
     }
 
-    if (info.mtimeMs >= cutoffMs) {
-      return { ok: false, output: 'modified since planning (kept)' };
+    if (!ownedByMe(info)) {
+      return kept('belongs to another user');
     }
 
-    if (!isInside(boundaryReal, file)) {
-      return { ok: false, output: 'outside the allowed folder' };
+    const isFolder = info.isDirectory();
+
+    if (!isFolder && !info.isFile()) {
+      return kept('is not a file or folder');
     }
 
-    await removeFile(file);
+    const problem = isFolder ? await validateTarget(tempReal, entry) : null;
+
+    if (problem) {
+      return kept(problem);
+    }
+
+    if (!isInside(tempReal, entry)) {
+      return kept('outside the allowed folder');
+    }
+
+    const tree = isFolder ? await measure(entry) : { bytes: info.size, newest: info.mtimeMs };
+
+    return { reason: tree.newest >= cutoffMs ? 'changed recently' : null, bytes: tree.bytes, isFolder };
+  } catch (err) {
+    return kept(errorCode(err) === 'ENOENT' ? 'no longer exists' : errorText(err));
+  }
+}
+
+/**
+ * Delete a temp entry after checking it again with checkTempEntry: it may have changed, or been replaced by
+ * a link, since planning. Never rejects.
+ * @param {string} tempReal  resolved temp folder
+ * @param {string} entry  file or folder directly inside it
+ * @param {number} cutoffMs  the entry is kept if anything in it changed at or after this time
+ * @returns {Promise<RunResult>} ok, or why it was kept or what went wrong
+ */
+export async function removeTempEntry(tempReal, entry, cutoffMs) {
+  const { reason, isFolder } = await checkTempEntry(tempReal, entry, cutoffMs);
+
+  if (reason) {
+    return { ok: false, output: `${reason} (re-checked before deleting; kept)` };
+  }
+
+  if (isFolder) {
+    return safeRemoveTree(entry, tempReal);
+  }
+
+  try {
+    await removeFile(entry);
 
     return { ok: true, output: '' };
   } catch (err) {

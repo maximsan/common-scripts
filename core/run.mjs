@@ -149,12 +149,13 @@ export function formatBytes(bytes) {
 }
 
 /**
- * Whole days between `mtimeMs` and `now`.
+ * Whole days between `mtimeMs` and `now`. A time after `now` (a change after planning, or a clock
+ * ahead) counts as 0 days.
  * @param {number} mtimeMs  an earlier time
  * @param {number} [now]  the later time, by default the current time
  * @returns {number} full days in between
  */
-export const ageInDays = (mtimeMs, now = Date.now()) => Math.floor((now - mtimeMs) / DAY_MS);
+export const ageInDays = (mtimeMs, now = Date.now()) => Math.max(0, Math.floor((now - mtimeMs) / DAY_MS));
 
 /**
  * Total size of plan items whose size is known.

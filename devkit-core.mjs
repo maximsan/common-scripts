@@ -13,7 +13,7 @@ export { HOST_RULES } from './core/platform.mjs';
 export { assertSafeRoot, exists, resolveTempDir, toPosix } from './core/paths.mjs';
 export { git, lastLine, runShell, yarnMajor } from './core/processes.mjs';
 export { findPackageFiles, findRepos, measure } from './core/discovery.mjs';
-export { checkRepoFolder, removeRepoFolder, safeRemoveOldFile, safeRemoveTree } from './core/deletion.mjs';
+export { checkRepoFolder, checkTempEntry, removeRepoFolder, removeTempEntry } from './core/deletion.mjs';
 export { ageInDays, formatBytes, mapPool, planAndRun, planFolders, skippedItem } from './core/run.mjs';
 export { readState, writeState } from './core/state.mjs';
 export { parseArgs, runMain } from './core/cli.mjs';

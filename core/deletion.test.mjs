@@ -4,11 +4,11 @@
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, renameSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { NODE_MODULES } from './constants.mjs';
-import { checkRepoFolder, removeRepoFolder, safeRemoveTree } from './deletion.mjs';
-import { git, makeRepo, tempWorkspace, write } from '../test-helpers.mjs';
+import { DAY_MS, NODE_MODULES } from './constants.mjs';
+import { checkRepoFolder, checkTempEntry, removeRepoFolder, removeTempEntry, safeRemoveTree } from './deletion.mjs';
+import { backdate, git, makeRepo, tempWorkspace, write } from '../test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('core-deletion');
 
@@ -132,4 +132,77 @@ test('checkRepoFolder ignores GIT_DIR / GIT_INDEX_FILE inherited from the parent
   } finally {
     delete process.env.GIT_DIR;
   }
+});
+
+test('checkTempEntry applies every temp-entry rule', async () => {
+  const temp = join(workspace, 'temp-rules');
+  const outside = join(workspace, 'temp-rules-outside');
+  const cutoff = Date.now() - 7 * DAY_MS;
+
+  write(join(temp, 'old.log'));
+  backdate(join(temp, 'old.log'), 20);
+  write(join(temp, 'new.log'));
+  write(join(temp, 'old-dir', 'x.txt'));
+  backdate(join(temp, 'old-dir', 'x.txt'), 20);
+  backdate(join(temp, 'old-dir'), 20);
+  write(join(temp, 'mixed', 'old.txt'));
+  backdate(join(temp, 'mixed', 'old.txt'), 20);
+  write(join(temp, 'mixed', 'new.txt'));
+  write(join(outside, 'precious.txt'));
+  symlinkSync(outside, join(temp, 'linked'), 'dir');
+
+  /** @type {[string, RegExp | null][]} */
+  const cases = [
+    ['old.log', null],
+    ['new.log', /changed recently/],
+    ['old-dir', null],
+    ['mixed', /changed recently/], // one new file keeps the whole folder
+    ['linked', /symlink/],
+    ['missing', /no longer exists/],
+  ];
+
+  for (const [name, expected] of cases) {
+    const { reason } = await checkTempEntry(temp, join(temp, name), cutoff);
+
+    if (expected) {
+      assert.match(String(reason), expected, name);
+    } else {
+      assert.equal(reason, null, name);
+    }
+  }
+});
+
+test('removeTempEntry checks again and keeps an entry that changed after planning', async () => {
+  const temp = join(workspace, 'temp-recheck');
+  const outside = join(workspace, 'temp-recheck-outside');
+  const cutoff = Date.now() - 7 * DAY_MS;
+
+  for (const name of ['touched.log', 'swapped.log', 'gone.log']) {
+    write(join(temp, name));
+    backdate(join(temp, name), 20);
+  }
+
+  write(join(temp, 'touched-dir', 'x.txt'));
+  backdate(join(temp, 'touched-dir', 'x.txt'), 20);
+  backdate(join(temp, 'touched-dir'), 20);
+  write(join(outside, 'precious.txt'));
+
+  for (const name of ['touched.log', 'swapped.log', 'gone.log', 'touched-dir']) {
+    assert.equal((await checkTempEntry(temp, join(temp, name), cutoff)).reason, null, `${name} is planned`);
+  }
+
+  write(join(temp, 'touched.log'));
+  write(join(temp, 'touched-dir', 'new.txt'));
+  rmSync(join(temp, 'swapped.log'));
+  symlinkSync(outside, join(temp, 'swapped.log'), 'dir');
+
+  assert.match((await removeTempEntry(temp, join(temp, 'touched.log'), cutoff)).output, /changed recently.*kept/);
+  assert.match((await removeTempEntry(temp, join(temp, 'touched-dir'), cutoff)).output, /changed recently.*kept/);
+  assert.match((await removeTempEntry(temp, join(temp, 'swapped.log'), cutoff)).output, /symlink.*kept/);
+  assert.equal(existsSync(join(temp, 'touched.log')), true);
+  assert.equal(existsSync(join(temp, 'touched-dir', 'x.txt')), true);
+  assert.equal(existsSync(join(outside, 'precious.txt')), true);
+
+  assert.deepEqual(await removeTempEntry(temp, join(temp, 'gone.log'), cutoff), { ok: true, output: '' });
+  assert.equal(existsSync(join(temp, 'gone.log')), false);
 });

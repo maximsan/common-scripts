@@ -15,10 +15,9 @@ import { lstat, readdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import {
-  ageInDays, assertSafeRoot, DAY_MS, DEFAULT_JOBS, EXIT_OK, exists, findRepos, formatBytes, git, GIT_FOLDER,
-  HOST_RULES, lastLine, measure, NODE_MODULES, NUL, parseArgs, planAndRun, planFolders, readState, resolveTempDir,
-  runMain, runShell, safeRemoveOldFile, safeRemoveTree, skippedItem, TEXT_ENCODING, writeState, YARN_BERRY_MAJOR,
-  yarnMajor,
+  ageInDays, assertSafeRoot, checkTempEntry, DAY_MS, DEFAULT_JOBS, EXIT_OK, exists, findRepos, formatBytes, git,
+  GIT_FOLDER, lastLine, measure, NODE_MODULES, NUL, parseArgs, planAndRun, planFolders, readState, removeTempEntry,
+  resolveTempDir, runMain, runShell, skippedItem, TEXT_ENCODING, writeState, YARN_BERRY_MAJOR, yarnMajor,
 } from './devkit-core.mjs';
 
 export const SECTIONS = Object.freeze(['node_modules', 'build', 'temp', 'cache']);
@@ -131,16 +130,8 @@ export function planBuildOutputs(repos, { buildDays, jobs = DEFAULT_JOBS, now = 
 }
 
 /**
- * True when the current user owns the entry. On a shared temp folder (Linux /tmp) other users' entries
- * are kept. Windows reports no owner here; its temp folder is per user anyway.
- * @param {import('node:fs').Stats} info  the entry's lstat result
- * @returns {boolean} whether it may be deleted on ownership grounds
- */
-const ownedByMe = (info) => !HOST_RULES.fileOwners || info.uid === process.getuid?.();
-
-/**
- * Top-level temp-folder entries with nothing newer than `tempDays`. Links and other users' entries are
- * left alone. Each entry is re-checked right before deletion and kept if anything inside changed meanwhile.
+ * Temp entries (see GLOSSARY.md) that checkTempEntry allows to delete. Each is checked again right before
+ * deletion.
  * @param {string} tempReal  resolved temp folder
  * @param {{ tempDays: number, now?: number }} options  age threshold, and the time to measure ages from
  * @returns {Promise<{ items: PlanItem[], keptCount: number }>} entries to delete, and how many were kept
@@ -152,47 +143,14 @@ export async function planTemp(tempReal, { tempDays, now = Date.now() }) {
   let keptCount = 0;
 
   for (const name of await readdir(tempReal)) {
-    const full = path.join(tempReal, name);
-    let info;
+    const entry = path.join(tempReal, name);
+    const { reason, bytes } = await checkTempEntry(tempReal, entry, cutoff);
 
-    try {
-      info = await lstat(full);
-    } catch {
-      continue;
-    }
-
-    if (info.isSymbolicLink() || !ownedByMe(info)) {
+    if (reason) {
       keptCount += 1;
-      continue;
+    } else {
+      items.push({ name, bytes, skip: null, run: () => removeTempEntry(tempReal, entry, cutoff) });
     }
-
-    const isFolder = info.isDirectory();
-    const tree = isFolder ? await measure(full) : { bytes: info.size, newest: info.mtimeMs };
-
-    if (tree.newest >= cutoff) {
-      keptCount += 1;
-      continue;
-    }
-
-    /**
-     * Delete the entry unless something in it changed since planning.
-     * @returns {Promise<import('./devkit-core.mjs').RunResult>} ok, or why it was kept
-     */
-    const removeIfStillOld = async () => {
-      if (!isFolder) {
-        return safeRemoveOldFile(full, tempReal, cutoff);
-      }
-
-      const newest = await measure(full).then((current) => current.newest, () => Infinity);
-
-      if (newest >= cutoff) {
-        return { ok: false, output: 'modified since planning (kept)' };
-      }
-
-      return safeRemoveTree(full, tempReal);
-    };
-
-    items.push({ name, bytes: tree.bytes, skip: null, run: removeIfStillOld });
   }
 
   return { items, keptCount };
@@ -366,7 +324,7 @@ async function tempSection({ tempDir, print }, { tempDays, now }) {
     const tempReal = await resolveTempDir({ temp: tempDir });
     const { items, keptCount } = await planTemp(tempReal, { tempDays, now });
     const title = `Temp-folder entries with nothing newer than ${tempDays} days (${tempReal}); `
-      + `${keptCount} kept (newer, a link, or another user's)`;
+      + `${keptCount} kept (newer, a link, another user's, or not a file or folder)`;
 
     return { title, items };
   } catch (err) {

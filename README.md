@@ -8,7 +8,7 @@ Node.js scripts for the folder that holds your git repos. They run on Windows (b
 | `nmclean.mjs` | deletes `node_modules` in every repo, including workspace packages | dry run |
 | `nminstall.mjs` | lockfile-exact install: `npm ci`, `yarn install --frozen-lockfile` (Yarn 1) or `yarn install --immutable` (Yarn 2+) | dry run, one repo at a time |
 | `devclean.mjs` | periodic cleanup: stale `node_modules`, old build outputs, old temp-folder entries, npm/Yarn 1 caches; review-only report of agent files | dry run |
-| `npmrctoken.mjs` | puts a new registry token into the `_authToken=` line of every `.npmrc`, in repo folders and their package folders | dry run |
+| `npmrctoken.mjs` | puts a new registry token into the `_authToken=` line of every `.npmrc`, in repos and their package folders | dry run |
 
 The shared code holds the safety checks and the plan → confirm → run flow of `nmclean`, `nminstall`, `devclean` and `npmrctoken`. Scripts import it only through `devkit-core.mjs`; the code itself is in `core/`, one file per area, each with its tests next to it. `gpall` is standalone: it deletes nothing, so it needs none of those checks. All the scripts share these conventions:
 
@@ -113,7 +113,11 @@ macOS and Linux allow renaming and deleting files that are in use. There, a fold
 - macOS: `/private/var/folders` (each user's own temp folder) or `/private/tmp`;
 - Linux: `/tmp` or `/var/tmp`.
 
-Only top-level entries with nothing newer than the cutoff are deleted, each re-checked first. Links are kept. On macOS and Linux, entries owned by another user are kept too, since `/tmp` is shared.
+Only [temp entries](GLOSSARY.md) with nothing newer than the cutoff are deleted. Every rule is checked again right before each deletion. These temp entries are kept:
+
+- links;
+- entries that are neither a file nor a folder, such as sockets;
+- on macOS and Linux, entries owned by another user, since `/tmp` is shared.
 
 **Token updates** (`npmrctoken` only):
 

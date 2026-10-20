@@ -48,6 +48,28 @@ test('stale node_modules and build outputs respect the age thresholds', async ()
   assert.equal(skipOf(await planBuildOutputs(repos, { buildDays: 7 }), 'fresh/dist'), null);
 });
 
+test('node_modules of a repo that changed after planning is kept', async () => {
+  const root = join(workspace, 'recheck');
+  const repo = makeRepo(root, 'repo');
+
+  write(join(repo, 'node_modules', 'a.js'));
+
+  for (const file of ['index.js', 'package.json', '.gitignore', '']) {
+    backdate(join(repo, file), 60);
+  }
+
+  const [item] = await planStaleNodeModules(await findRepos(root), { staleDays: 30 });
+
+  assert.equal(item.skip, null);
+  write(join(repo, 'index.js'), 'changed');
+
+  const result = await item.run();
+
+  assert.equal(result.ok, false);
+  assert.match(result.output, /changed 0 day.*re-checked before deleting; kept/);
+  assert.equal(existsSync(join(repo, 'node_modules', 'a.js')), true);
+});
+
 test('a build folder holding a tracked file is kept', async () => {
   const root = join(workspace, 'tracked');
   const repo = makeRepo(root, 'repo', { ignore: '' });
