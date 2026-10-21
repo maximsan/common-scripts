@@ -10,7 +10,7 @@ import { processTree, runShell } from '../../lib/shared/processes.mjs';
 import { tempWorkspace } from '../setup.mjs';
 import { write } from '../utils.mjs';
 
-const { root: workspace, cleanup } = tempWorkspace('core-processes');
+const { root: workspace, cleanup } = tempWorkspace('processes');
 const ON_WINDOWS = HOST_RULES.name === 'win32';
 
 after(cleanup);

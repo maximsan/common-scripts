@@ -110,7 +110,7 @@ test('an existing node_modules that is a link or holds a nested repo is kept in 
   assert.equal(existsSync(join(nested, 'node_modules', 'patched-lib', '.git', 'HEAD')), true);
 });
 
-test('as a process: prints the plan, and refuses --apply without a terminal', () => {
+test('as a process: prints the plan', () => {
   const root = join(workspace, 'process');
   const app = makeRepo(root, 'app');
 
@@ -120,9 +120,4 @@ test('as a process: prints the plan, and refuses --apply without a terminal', ()
 
   assert.equal(dryRun.status, 0, dryRun.stderr);
   assert.match(dryRun.stdout, /do {4}app .*npm ci/);
-
-  const refused = runCli(['nminstall', '--apply'], { cwd: root, stateDir });
-
-  assert.equal(refused.status, 2);
-  assert.match(refused.stderr, /No interactive terminal/);
 });

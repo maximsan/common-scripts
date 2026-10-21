@@ -8,7 +8,7 @@ import { findNamedDirs } from '../../lib/shared/discovery.mjs';
 import { tempWorkspace } from '../setup.mjs';
 import { makeRepo, write } from '../utils.mjs';
 
-const { root: workspace, cleanup } = tempWorkspace('core-discovery');
+const { root: workspace, cleanup } = tempWorkspace('discovery');
 
 after(cleanup);
 

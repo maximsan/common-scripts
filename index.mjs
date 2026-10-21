@@ -6,12 +6,9 @@
 // Runs on Windows, macOS and Linux. Node 18+, no dependencies. See README.md.
 
 import { COMMANDS } from './lib/commands/index.mjs';
-import { runCommand } from './lib/shared/index.mjs';
+import { EXIT_OK, EXIT_REFUSED, HELP_FLAGS, runCommand } from './lib/shared/index.mjs';
 
 const ARGS_START = 2; // process.argv holds node and this file first
-const HELP_FLAGS = ['--help', '-h'];
-const EXIT_OK = 0;
-const EXIT_REFUSED = 2;
 
 const NAME_WIDTH = Math.max(...Object.keys(COMMANDS).map((name) => name.length));
 

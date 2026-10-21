@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { findRepos, parseArgs, pullAll } from '../../lib/commands/gpall.mjs';
+import { parseArgs, pullAll } from '../../lib/commands/gpall.mjs';
 import { runCli, tempWorkspace } from '../setup.mjs';
 import { git } from '../utils.mjs';
 
@@ -63,13 +63,7 @@ before(() => {
 
 after(cleanup);
 
-test('findRepos returns only folders containing .git', async () => {
-  assert.deepEqual(await findRepos(root), [
-    'broken-remote', 'clean', 'dirty-conflict', 'diverged', 'no-upstream',
-  ]);
-});
-
-test('pullAll attempts every repo and keeps going after failures', async () => {
+test('pullAll attempts every repo, skips folders without .git, and keeps going after failures', async () => {
   /** @type {string[]} */
   const seen = [];
   const results = await pullAll(root, {
@@ -80,7 +74,9 @@ test('pullAll attempts every repo and keeps going after failures', async () => {
   });
   const byName = Object.fromEntries(results.map((result) => [result.name, result]));
 
-  assert.equal(results.length, 5);
+  assert.deepEqual(results.map((result) => result.name), [
+    'broken-remote', 'clean', 'dirty-conflict', 'diverged', 'no-upstream',
+  ]);
   assert.equal(seen.length, 5);
 
   assert.equal(byName.clean.ok, true);

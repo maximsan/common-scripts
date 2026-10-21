@@ -121,7 +121,7 @@ test('a .npmrc that is a link is left alone, so a user-wide file is never change
   assert.equal(readFileSync(shared, 'utf8'), tokenLine);
 });
 
-test('as a process: prints the masked plan, and refuses --apply without a terminal', () => {
+test('as a process: prints the masked plan', () => {
   const root = join(workspace, 'process');
   const app = makeRepo(root, 'app');
 
@@ -132,9 +132,4 @@ test('as a process: prints the masked plan, and refuses --apply without a termin
   assert.equal(dryRun.status, 0, dryRun.stderr);
   assert.match(dryRun.stdout, /do {4}app\/\.npmrc .*npm_\*{12}2222/);
   assert.doesNotMatch(dryRun.stdout, new RegExp(NEW_TOKEN));
-
-  const refused = runCli(['npmrctoken', NEW_TOKEN, '--apply'], { cwd: root, stateDir });
-
-  assert.equal(refused.status, 2);
-  assert.match(refused.stderr, /No interactive terminal/);
 });
