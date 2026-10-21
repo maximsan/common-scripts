@@ -2,12 +2,15 @@
 
 What changed in each version of the package that `npm pack` builds. The newest version comes first. Version numbers follow [semantic versioning](https://semver.org/): a new feature raises the middle number, a fix the last one.
 
-## Unreleased
+## 2.0.0 (2026-10-21)
+
+A major version, because commands that use `--apply`, `--build-days` or `--temp-days` stop working. Run them without `--apply` in a terminal, or replace `--apply --yes` with `--yes`; leave out the two `devclean` options.
 
 ### Changed
 
 - In a terminal, `nmclean`, `install`, `devclean` and `token` no longer stop after the plan: they show the pick list and ask for "yes" right away. Esc or any answer other than "yes" changes nothing. Without a terminal they still only print the plan. See [decision 3](adr/0003-confirm-no-schedule.md).
 - `--yes` alone now takes everything without questions, also without a terminal. It replaces `--apply --yes`.
+- In the pick list, the `[x]` of a selected line is green where the terminal shows colors.
 
 ### Removed
 
