@@ -43,7 +43,7 @@ The scripts travel as one package file. Nothing is published to a registry: `"pr
 3. On that machine, install it:
 
    ```bash
-   npm install -g ./common-scripts-1.0.0.tgz
+   npm install -g ./common-scripts-<version>.tgz
    ```
 
    This adds the command `devkit` for your user, in Git Bash, PowerShell and cmd alike. It needs no administrator rights: on Windows, npm installs into `%AppData%\npm` ([npm folders](https://docs.npmjs.com/cli/v11/configuring-npm/folders)). It downloads nothing, because the package has no dependencies. Check it with `devkit --help`.
