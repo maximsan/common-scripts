@@ -74,14 +74,14 @@ async function removeLink(link) {
 }
 
 /**
- * Remove a file, clearing the read-only attribute if needed.
+ * Remove a file, clearing the read-only attribute first where that blocks deletion (see the platform rules).
  * @param {string} file  path of the file
  */
 async function removeFile(file) {
   try {
     await unlink(file);
   } catch (err) {
-    if (!READ_ONLY_CODES.includes(errorCode(err) ?? '')) {
+    if (!HOST_RULES.readOnlyBlocksDelete || !READ_ONLY_CODES.includes(errorCode(err) ?? '')) {
       throw err;
     }
 
@@ -199,8 +199,36 @@ export async function safeRemoveTree(target, boundaryReal) {
 const ownedByMe = (info) => !HOST_RULES.fileOwners || info.uid === process.getuid?.();
 
 /**
+ * The keep reason for something last changed at `mtimeMs`.
+ * @param {number} mtimeMs  newest change
+ * @param {number} cutoffMs  changes at or after this time keep it
+ * @returns {string | null} why it is kept, or null when it is old enough
+ */
+const changedSince = (mtimeMs, cutoffMs) => (mtimeMs >= cutoffMs ? 'changed recently' : null);
+
+/**
+ * Why a temp folder must be kept: it holds a nested repo or a special file (a program may still use it,
+ * whatever its age), or something in it changed recently.
+ * @param {TreeInfo} tree  what measure found in the folder
+ * @param {number} cutoffMs  changes at or after this time keep it
+ * @returns {string | null} why it is kept, or null when it may be deleted
+ */
+function tempFolderReason(tree, cutoffMs) {
+  if (tree.hasNestedRepo) {
+    return 'contains a nested git repo (left alone)';
+  }
+
+  if (tree.hasSpecialFile) {
+    return 'contains a socket or other special file (left alone)';
+  }
+
+  return changedSince(tree.newest, cutoffMs);
+}
+
+/**
  * Whether a temp entry (see GLOSSARY.md) may be deleted, applying every rule in README "Temp folder": it is
- * a file or a folder, not a link, yours, and nothing in it changed at or after `cutoffMs`. Never rejects.
+ * a file or a folder, not a link, yours, holds no nested repo or special file, and nothing in it changed at
+ * or after `cutoffMs`. Never rejects.
  * @param {string} tempReal  resolved temp folder
  * @param {string} entry  file or folder directly inside it
  * @param {number} cutoffMs  the entry is kept if anything in it changed at or after this time
@@ -232,19 +260,21 @@ export async function checkTempEntry(tempReal, entry, cutoffMs) {
       return kept('is not a file or folder');
     }
 
-    const problem = isFolder ? await validateTarget(tempReal, entry) : null;
+    if (!isFolder) {
+      const reason = isInside(tempReal, entry) ? changedSince(info.mtimeMs, cutoffMs) : 'outside the allowed folder';
+
+      return { reason, bytes: info.size, isFolder };
+    }
+
+    const problem = await validateTarget(tempReal, entry);
 
     if (problem) {
       return kept(problem);
     }
 
-    if (!isInside(tempReal, entry)) {
-      return kept('outside the allowed folder');
-    }
+    const tree = await measure(entry);
 
-    const tree = isFolder ? await measure(entry) : { bytes: info.size, newest: info.mtimeMs };
-
-    return { reason: tree.newest >= cutoffMs ? 'changed recently' : null, bytes: tree.bytes, isFolder };
+    return { reason: tempFolderReason(tree, cutoffMs), bytes: tree.bytes, isFolder };
   } catch (err) {
     return kept(errorCode(err) === 'ENOENT' ? 'no longer exists' : errorText(err));
   }

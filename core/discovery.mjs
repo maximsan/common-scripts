@@ -8,7 +8,14 @@ import { exists, isInside, realpathOrResolve, trashBase, validateTarget } from '
 
 /** @typedef {{ name: string, real: string }} Repo  a repo folder name and its resolved path */
 
-/** @typedef {{ bytes: number, files: number, newest: number, truncated: boolean, hasNestedRepo: boolean }} TreeInfo */
+/**
+ * What measure found in a tree. `hasSpecialFile` marks an entry that is neither a file, a folder nor a link,
+ * such as a socket a running program listens on.
+ * @typedef {{
+ *   bytes: number, files: number, newest: number, truncated: boolean, hasNestedRepo: boolean,
+ *   hasSpecialFile: boolean,
+ * }} TreeInfo
+ */
 
 const MAX_SEARCH_DEPTH = 6;
 
@@ -149,13 +156,18 @@ export async function findPackageFiles(repoReal, fileName) {
 }
 
 /**
- * Size, file count and newest mtime of a tree, and whether a nested repo (.git) is inside. Never follows links.
+ * Size, file count and newest mtime of a tree, and whether a nested repo (.git) or a special file is inside.
+ * Never follows links.
  * @param {string} dir  folder to measure
  * @param {{ skipNames?: Set<string>, maxFiles?: number }} [options]  names to skip; stop early after maxFiles
  * @returns {Promise<TreeInfo>} the totals; `truncated` is true when it stopped early
  */
 export async function measure(dir, { skipNames = new Set(), maxFiles = Infinity } = {}) {
-  const tree = { bytes: 0, files: 0, newest: (await lstat(dir)).mtimeMs, truncated: false, hasNestedRepo: false };
+  /** @type {TreeInfo} */
+  const tree = {
+    bytes: 0, files: 0, newest: (await lstat(dir)).mtimeMs, truncated: false, hasNestedRepo: false,
+    hasSpecialFile: false,
+  };
   const stack = [dir];
 
   for (let current = stack.pop(); current !== undefined; current = stack.pop()) {
@@ -196,6 +208,7 @@ export async function measure(dir, { skipNames = new Set(), maxFiles = Infinity 
       } else {
         tree.bytes += info.size;
         tree.files += 1;
+        tree.hasSpecialFile ||= !info.isFile();
       }
 
       if (tree.files >= maxFiles) {

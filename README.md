@@ -93,7 +93,9 @@ These rules apply to `nmclean`, `nminstall`, `devclean` and `npmrctoken`. `gpall
 
 The search never enters dot-folders (`.venv`, `.yarn`, …), `node_modules` or nested repos.
 
-`nminstall` applies the same rules to an existing `node_modules`, because `npm ci` deletes it and Yarn rewrites it. A `node_modules` that fails a rule shows as kept in the dry run, and the repo is not installed.
+Before `nminstall` installs a repo, it checks the `node_modules` folder at the repo root. It uses the same rules as for a [repo folder](GLOSSARY.md), because `npm ci` deletes this folder and Yarn changes it. If the folder does not pass a check, the dry run shows it as kept, and `nminstall` does not install the repo.
+
+`nminstall` does not check the `node_modules` folders of workspace packages. A workspace package is a package in a subfolder of the repo, with its own `package.json`. `npm ci` also deletes the contents of these folders.
 
 **Links.** Symlinks and junctions are removed as links. Their targets are never touched, and a folder reached through a link is never entered.
 
@@ -104,6 +106,8 @@ The search never enters dot-folders (`.venv`, `.yarn`, …), `node_modules` or n
 - a run interrupted after the rename leaves `<name>.devkit-deleting-<timestamp>` behind, which the next run finishes off.
 
 The next run deletes such a leftover without the git-ignore check, because `.gitignore` no longer matches the new name. Every other check still applies, including "no tracked file".
+
+On Windows, a read-only file is made writable first, because the attribute blocks deletion. macOS and Linux never change a file's permissions: there, the folder's permissions decide, and a changed mode would also reach every hard link of the file.
 
 macOS and Linux allow renaming and deleting files that are in use. There, a folder in use is deleted, and programs that still have its files open keep reading them until they close them.
 
@@ -117,6 +121,8 @@ Only [temp entries](GLOSSARY.md) with nothing newer than the cutoff are deleted.
 
 - links;
 - entries that are neither a file nor a folder, such as sockets;
+- folders holding a socket or another special file anywhere inside, since a running program may still use them;
+- folders holding a nested git repo, as in repos;
 - on macOS and Linux, entries owned by another user, since `/tmp` is shared.
 
 **Token updates** (`npmrctoken` only):

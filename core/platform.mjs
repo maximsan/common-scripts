@@ -34,7 +34,10 @@ const GIT_ENV_PREFIX = 'GIT_';
  * - onlyAbsolutePath: child processes get a PATH with only absolute folders, so an empty entry or "."
  *   can't make them run an npm or yarn planted in the current folder;
  * - treeKill: how to end a child and everything it started: taskkill, or a ps listing plus kill;
- * - fileOwners: files have an owning user id, so a shared temp folder can hold other users' entries.
+ * - fileOwners: files have an owning user id, so a shared temp folder can hold other users' entries;
+ * - readOnlyBlocksDelete: a read-only file can't be deleted until the attribute is cleared. Elsewhere the
+ *   parent folder's permissions decide, and changing the file's mode would only widen access to every
+ *   hard link of it.
  * @typedef {{
  *   name: string,
  *   paths: import('node:path').PlatformPath,
@@ -47,6 +50,7 @@ const GIT_ENV_PREFIX = 'GIT_';
  *   onlyAbsolutePath: boolean,
  *   treeKill: 'taskkill' | 'ps',
  *   fileOwners: boolean,
+ *   readOnlyBlocksDelete: boolean,
  * }} PlatformRules
  */
 
@@ -65,6 +69,7 @@ const UNIX_BASE = {
   onlyAbsolutePath: true,
   treeKill: 'ps',
   fileOwners: true,
+  readOnlyBlocksDelete: false,
 };
 
 /** Rules for a system without its own entry: Unix behaviour, and no known temp folder. */
@@ -84,6 +89,7 @@ const PLATFORM_RULES = Object.freeze({
     onlyAbsolutePath: false, // cmd.exe is told not to search the current folder instead
     treeKill: 'taskkill',
     fileOwners: false,
+    readOnlyBlocksDelete: true,
   },
   darwin: { ...UNIX_BASE, name: 'darwin', tempHomes: () => ['/private/var/folders', '/private/tmp'] },
   linux: { ...UNIX_BASE, name: 'linux', tempHomes: () => ['/tmp', '/var/tmp'] },

@@ -4,13 +4,22 @@
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, renameSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  chmodSync, existsSync, linkSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, symlinkSync,
+} from 'node:fs';
+import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { DAY_MS, NODE_MODULES } from './constants.mjs';
+import { HOST_RULES } from './platform.mjs';
 import { checkRepoFolder, checkTempEntry, removeRepoFolder, removeTempEntry, safeRemoveTree } from './deletion.mjs';
 import { backdate, git, makeRepo, tempWorkspace, write } from '../test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('core-deletion');
+const ON_WINDOWS = HOST_RULES.name === 'win32';
+const PRIVATE_FILE_MODE = 0o600;
+const READ_ONLY_FOLDER_MODE = 0o555;
+const OPEN_FOLDER_MODE = 0o755;
+const MODE_BITS = 0o777;
 
 after(cleanup);
 
@@ -39,6 +48,29 @@ test('safeRemoveTree refuses a target that is itself a link, or outside the boun
   assert.match((await safeRemoveTree(join(boundary, NODE_MODULES), boundary)).output, /symlink/);
   assert.match((await safeRemoveTree(real, boundary)).output, /outside/);
   assert.equal(existsSync(join(real, 'file.js')), true);
+});
+
+test('a file that cannot be deleted keeps its mode, so a hard link outside the folder stays private', {
+  skip: HOST_RULES.readOnlyBlocksDelete && 'here the read-only attribute must be cleared to delete a file',
+}, async () => {
+  const boundary = join(workspace, 'hard-links');
+  const store = join(boundary, 'store', 'file');
+  const locked = join(boundary, 'target', 'locked');
+
+  write(store);
+  chmodSync(store, PRIVATE_FILE_MODE);
+  mkdirSync(locked, { recursive: true });
+  linkSync(store, join(locked, 'file')); // like a pnpm store file linked into node_modules
+  chmodSync(locked, READ_ONLY_FOLDER_MODE); // its folder refuses deletion
+
+  try {
+    await safeRemoveTree(join(boundary, 'target'), boundary);
+    assert.equal(statSync(store).mode & MODE_BITS, PRIVATE_FILE_MODE);
+  } finally {
+    for (const name of readdirSync(boundary).filter((entry) => entry.startsWith('target'))) {
+      chmodSync(join(boundary, name, 'locked'), OPEN_FOLDER_MODE); // renamed before deleting; let cleanup in
+    }
+  }
 });
 
 test('checkRepoFolder applies every repo-folder rule', async () => {
@@ -150,6 +182,10 @@ test('checkTempEntry applies every temp-entry rule', async () => {
   write(join(temp, 'mixed', 'new.txt'));
   write(join(outside, 'precious.txt'));
   symlinkSync(outside, join(temp, 'linked'), 'dir');
+  write(join(temp, 'old-clone', '.git', 'HEAD'));
+  backdate(join(temp, 'old-clone', '.git', 'HEAD'), 20);
+  backdate(join(temp, 'old-clone', '.git'), 20);
+  backdate(join(temp, 'old-clone'), 20);
 
   /** @type {[string, RegExp | null][]} */
   const cases = [
@@ -159,6 +195,7 @@ test('checkTempEntry applies every temp-entry rule', async () => {
     ['mixed', /changed recently/], // one new file keeps the whole folder
     ['linked', /symlink/],
     ['missing', /no longer exists/],
+    ['old-clone', /nested git repo/], // deleting it would leave .git behind
   ];
 
   for (const [name, expected] of cases) {
@@ -169,6 +206,34 @@ test('checkTempEntry applies every temp-entry rule', async () => {
     } else {
       assert.equal(reason, null, name);
     }
+  }
+});
+
+test('a temp folder holding a socket is kept, whatever its age', {
+  skip: ON_WINDOWS && 'a Windows server path is a named pipe, not a file in the folder',
+}, async () => {
+  const temp = join(workspace, 'temp-socket');
+  const folder = join(temp, 'agent-dir');
+  const previous = process.cwd();
+
+  mkdirSync(folder, { recursive: true });
+  process.chdir(folder); // a short relative path: socket paths are limited to about 100 characters
+
+  const server = createServer();
+
+  try {
+    await new Promise((resolve) => {
+      server.listen('agent.sock', () => resolve(undefined));
+    });
+    backdate(join(folder, 'agent.sock'), 20);
+    backdate(folder, 20);
+
+    const { reason } = await checkTempEntry(temp, folder, Date.now() - 7 * DAY_MS);
+
+    assert.match(String(reason), /socket/);
+  } finally {
+    server.close();
+    process.chdir(previous);
   }
 });
 
