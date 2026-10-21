@@ -57,7 +57,7 @@ To update, raise `version` in `package.json`, build the package again, and insta
 
 While you work on the scripts, run `npm link` once in this repo instead. `devkit` then runs the code in the repo directly, so every change takes effect without a new package.
 
-Run the commands from your repos folder, for example `devkit nmclean`. Each command has `--help`. `nmclean`, `install`, `devclean` and `token` only print a plan (a dry run), ending with the command that applies it. With `--apply`, they first show a list to pick from: repos for `nmclean` and `install`, `.npmrc` files for `token`, sections for `devclean`. Move with the arrow keys and select with Space; where the terminal does not accept single keypresses, you type the numbers instead, e.g. `1,3,5-7`. `--yes` skips the list and the confirmation and takes everything. If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--yes` after reviewing the dry run.
+Run the commands from your repos folder, for example `devkit nmclean`. Each command has `--help`. `nmclean`, `install`, `devclean` and `token` only print a plan (a dry run), ending with the command that applies it. With `--apply`, they first show a list to pick from: `node_modules` folders for `nmclean`, repos for `install`, `.npmrc` files for `token`, sections for `devclean`. Move with the arrow keys and select with Space; Enter with nothing selected takes the line under the cursor; where the terminal does not accept single keypresses, you type the numbers instead, e.g. `1,3,5-7`. `--yes` skips the list and the confirmation and takes everything. If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--yes` after reviewing the dry run.
 
 ### Updating the registry token
 
@@ -145,7 +145,8 @@ Keep `--init`. Without it, `node` is the container's first process, and ended ch
   - junction handling (run the check above);
   - the `taskkill` tree kill;
   - whether a file in use always blocks the rename;
-  - the arrow-key pick list and the status line in PowerShell and the VS Code terminal.
+  - the arrow-key pick list in PowerShell (it works in Git Bash in the VS Code terminal);
+  - the status line in PowerShell and the VS Code terminal.
 - The scripts refuse to run inside a OneDrive folder, so keep your repos outside OneDrive. They find OneDrive through the `OneDrive…` environment variables that the OneDrive client sets; a OneDrive folder without them is not recognised.
 - Yarn 2+ caches are per project and may be committed to git, so they are never cleaned. pnpm and bun projects are skipped.
 

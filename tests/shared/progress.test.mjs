@@ -52,10 +52,11 @@ test('in a terminal: the line is redrawn in place, output goes above it, and sto
 test('colors only where the terminal shows them; a narrow terminal cuts the label, never the time', () => {
   const colored = fakeStream({ isTTY: true, colors: true });
 
-  createProgress({ stream: colored.stream, write: () => {}, frames: ['*'], now: () => 0 }).start('Pull', 3);
+  createProgress({ stream: colored.stream, write: () => {}, frames: ['*'], now: () => 0 }).start('Checking repos', 3);
   assert.equal(
     colored.written.at(-1),
-    '\r\u001B[K\u001B[33m*\u001B[0m \u001B[1mPull: 0 of 3\u001B[0m \u001B[2m(0s)\u001B[0m',
+    '\r\u001B[K\u001B[33m*\u001B[0m \u001B[1;38;5;205mChecking\u001B[0m'
+    + '\u001B[1m repos: 0 of 3\u001B[0m \u001B[2m(0s)\u001B[0m',
   );
 
   const narrow = fakeStream({ isTTY: true, columns: 16 });

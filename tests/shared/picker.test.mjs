@@ -25,8 +25,10 @@ test('arrow keys move and wrap around; Space selects and unselects; a selects al
   assert.equal(press(['x'], 3), START);
 });
 
-test('Enter accepts; Esc and Ctrl+C cancel', () => {
+test('Enter accepts, and takes the highlighted item when none is selected; Esc and Ctrl+C cancel', () => {
   assert.equal(press(['return'], 3).done, 'accept');
+  assert.deepEqual([...press(['down', 'return'], 3).selected], [1]);
+  assert.deepEqual([...press(['space', 'down', 'return'], 3).selected], [0]);
   assert.equal(press(['escape'], 3).done, 'cancel');
   assert.equal(pressKey(START, { name: 'c', ctrl: true }, 3).done, 'cancel');
 });
