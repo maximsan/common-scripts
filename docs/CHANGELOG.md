@@ -2,6 +2,12 @@
 
 What changed in each version of the package that `npm pack` builds. The newest version comes first. Version numbers follow [semantic versioning](https://semver.org/): a new feature raises the middle number, a fix the last one.
 
+## Unreleased
+
+### Fixed
+
+- Esc at the "Type yes to continue" question cancels, as it does in the pick list. The question says so.
+
 ## 1.3.0 (2026-10-21)
 
 ### Added
