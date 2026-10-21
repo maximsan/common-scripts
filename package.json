@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "description": "Repo maintenance scripts. The scripts have no dependencies; the packages below are only for linting, formatting and type checking.",
+  "bin": {
+    "devkit": "index.mjs"
+  },
   "scripts": {
     "lint": "eslint .",
     "format": "eslint . --fix",

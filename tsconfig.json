@@ -9,5 +9,5 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["*.mjs", "core/*.mjs"]
+  "include": ["index.mjs", "lib/**/*.mjs", "tests/**/*.mjs"]
 }

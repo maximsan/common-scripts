@@ -30,8 +30,8 @@ const NO_INLINE_VALUES = [
 ];
 
 // Every difference between operating systems is read from the platform rules (PLATFORM_RULES in
-// core/platform.mjs), never from the system directly. Only the line that builds HOST_RULES reads it.
-const PLATFORM_MESSAGE = 'Read operating-system differences from PLATFORM_RULES in core/platform.mjs.';
+// lib/shared/platform.mjs), never from the system directly. Only the line that builds HOST_RULES reads it.
+const PLATFORM_MESSAGE = 'Read operating-system differences from PLATFORM_RULES in lib/shared/platform.mjs.';
 const NO_PLATFORM_CHECKS = [
   { selector: 'MemberExpression[object.name="process"][property.name="platform"]', message: PLATFORM_MESSAGE },
   { selector: 'ImportSpecifier[imported.name="platform"]', message: PLATFORM_MESSAGE },
