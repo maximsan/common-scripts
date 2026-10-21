@@ -2,6 +2,12 @@
 
 What changed in each version of the package that `npm pack` builds. The newest version comes first. Version numbers follow [semantic versioning](https://semver.org/): a new feature raises the middle number, a fix the last one.
 
+## Unreleased
+
+### Added
+
+- `nmclean --only` takes repo names or folder paths, so `--apply --yes` can act on some folders without the pick list. Only the named repos are measured. A name that matches no repo and no folder stops the run before anything changes.
+
 ## 1.2.0 (2026-10-21)
 
 ### Changed

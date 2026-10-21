@@ -66,6 +66,39 @@ test('--apply lists every node_modules on its own line and deletes only the pick
   assert.equal(existsSync(join(lib, 'packages', 'ui', 'node_modules')), false);
 });
 
+test('--only takes repo names and folder paths; a name that matches nothing changes nothing', async () => {
+  const root = join(workspace, 'only');
+  const app = makeRepo(root, 'app');
+  const lib = makeRepo(root, 'lib');
+  const web = makeRepo(root, 'web');
+
+  for (const repo of [app, lib, web]) {
+    write(join(repo, 'node_modules', 'a.js'));
+  }
+
+  write(join(lib, 'packages', 'ui', 'package.json'), '{}');
+  write(join(lib, 'packages', 'ui', 'node_modules', 'a.js'));
+
+  const dryRun = testContext({ cwd: root, stateDir });
+
+  assert.equal(await main(['--only', 'app,lib\\packages\\ui\\node_modules/'], dryRun.context), 0);
+  assert.match(dryRun.output(), /app\/node_modules/);
+  assert.match(dryRun.output(), /lib\/packages\/ui\/node_modules/);
+  assert.doesNotMatch(dryRun.output(), /lib\/node_modules|web\//);
+  assert.match(dryRun.output(), /devkit nmclean --only app,lib.* --apply/);
+
+  await assert.rejects(main(['--only', 'app,wbe', '--apply', '--yes'], dryRun.context), /no repo .*: wbe/);
+  assert.equal(existsSync(join(app, 'node_modules')), true);
+
+  const applied = testContext({ cwd: root, stateDir });
+
+  assert.equal(await main(['--only', 'lib', '--apply', '--yes'], applied.context), 0, applied.output());
+  assert.equal(existsSync(join(lib, 'node_modules')), false);
+  assert.equal(existsSync(join(lib, 'packages', 'ui', 'node_modules')), false);
+  assert.equal(existsSync(join(app, 'node_modules')), true);
+  assert.equal(existsSync(join(web, 'node_modules')), true);
+});
+
 test('as a process: refuses --apply without a terminal, deletes with --apply --yes', () => {
   const root = join(workspace, 'process');
   const app = makeRepo(root, 'app');
