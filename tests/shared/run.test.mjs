@@ -16,6 +16,7 @@ test('planAndRun attempts every item, returns exit code 1 on a failure, and refu
   const stateDir = join(workspace, 'state');
   const { context } = testContext({ cwd: workspace, stateDir });
   const options = { apply: true, yes: false, help: false, jobs: 2 };
+
   /** @type {import('../../lib/shared/run.mjs').PlanItem[]} */
   const items = [
     { name: 'good', skip: null, run: async () => ({ ok: true, output: '' }) },

@@ -14,7 +14,9 @@ import { runCli, tempWorkspace } from '../setup.mjs';
 import { git } from '../utils.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('gpall');
-const root = join(workspace, 'repos'); // the folder the script runs in (contains the clones)
+
+// The folder the script runs in (contains the clones).
+const root = join(workspace, 'repos');
 
 /**
  * Write a file and commit it.
@@ -57,6 +59,7 @@ before(() => {
 
   // Local commit -> branch diverges from the remote.
   commitFile(join(root, 'diverged'), 'local.txt', 'mine\n', 'local');
+
   // Uncommitted edit to the same file the remote changed.
   writeFileSync(join(root, 'dirty-conflict', 'a.txt'), 'my edit\n');
 });

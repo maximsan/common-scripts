@@ -26,7 +26,9 @@ test('checkRepoFolder applies every repo-folder rule', async () => {
   const root = join(workspace, 'repo-folders');
   const repo = makeRepo(root, 'rules', { ignore: 'ok/\nlinked/\nnested/\n\\[ab\\]/\n' });
   const outside = join(workspace, 'repo-folders-outside');
-  const leftover = 'gone.devkit-deleting-1712345678901'; // not ignored: its new name matches no rule
+
+  // Not ignored: its new name matches no rule.
+  const leftover = 'gone.devkit-deleting-1712345678901';
 
   write(join(repo, 'ok', 'a.js'));
   write(join(outside, 'precious.txt'));
@@ -36,7 +38,10 @@ test('checkRepoFolder applies every repo-folder rule', async () => {
   write(join(repo, 'a'));
   git(repo, 'add', 'a');
   git(repo, 'commit', '-q', '-m', 'a');
-  write(join(repo, '[ab]', 'x.js')); // "[ab]" is a folder name, not a glob matching the tracked "a"
+
+  // "[ab]" is a folder name, not a glob matching the tracked "a".
+  write(join(repo, '[ab]', 'x.js'));
+
   write(join(repo, leftover, 'x.js'));
 
   const caseRepo = makeRepo(root, 'case', { ignore: '' });
@@ -45,7 +50,9 @@ test('checkRepoFolder applies every repo-folder rule', async () => {
   git(caseRepo, 'add', '.');
   git(caseRepo, 'commit', '-q', '-m', 'Dist');
   write(join(caseRepo, '.gitignore'), 'dist/\n');
-  renameSync(join(caseRepo, 'Dist'), join(caseRepo, 'dist')); // a case-only rename, as on Windows
+
+  // A case-only rename, as on Windows.
+  renameSync(join(caseRepo, 'Dist'), join(caseRepo, 'dist'));
 
   /**
    * Always keeps, like an age rule that finds the folder too new.
@@ -63,7 +70,9 @@ test('checkRepoFolder applies every repo-folder rule', async () => {
     [repo, leftover, null],
     [caseRepo, 'dist', /tracked/],
     [repo, 'ok', /too new/, { keepIf: tooNew }],
-    [repo, leftover, null, { keepIf: tooNew }], // a leftover is finished whatever its age
+
+    // A leftover is finished whatever its age.
+    [repo, leftover, null, { keepIf: tooNew }],
   ];
 
   for (const [repoReal, folder, expected, options] of cases) {
@@ -104,7 +113,8 @@ test('checkRepoFolder ignores GIT_DIR / GIT_INDEX_FILE inherited from the parent
 
   const other = makeRepo(root, 'other');
 
-  process.env.GIT_DIR = join(other, '.git'); // would make ls-files read the wrong repo
+  // Would make ls-files read the wrong repo.
+  process.env.GIT_DIR = join(other, '.git');
 
   try {
     const { reason } = await checkRepoFolder(tracked, join(tracked, NODE_MODULES));

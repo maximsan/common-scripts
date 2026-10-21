@@ -43,10 +43,15 @@ test('checkTempEntry applies every temp-entry rule', async () => {
     ['old.log', null],
     ['new.log', /changed recently/],
     ['old-dir', null],
-    ['mixed', /changed recently/], // one new file keeps the whole folder
+
+    // One new file keeps the whole folder.
+    ['mixed', /changed recently/],
+
     ['linked', /symlink/],
     ['missing', /no longer exists/],
-    ['old-clone', /nested git repo/], // deleting it would leave .git behind
+
+    // Deleting it would leave .git behind.
+    ['old-clone', /nested git repo/],
   ];
 
   for (const [name, expected] of cases) {
@@ -68,7 +73,9 @@ test('a temp folder holding a socket is kept, whatever its age', {
   const previous = process.cwd();
 
   mkdirSync(folder, { recursive: true });
-  process.chdir(folder); // a short relative path: socket paths are limited to about 100 characters
+
+  // A short relative path: socket paths are limited to about 100 characters.
+  process.chdir(folder);
 
   const server = createServer();
 

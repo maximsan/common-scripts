@@ -68,7 +68,10 @@ test('dry run lists every file, --apply updates them, and the full token never a
   write(join(app, '.npmrc'), tokenLine);
   write(join(lib, 'packages', 'ui', 'package.json'), '{}');
   write(join(lib, 'packages', 'ui', '.npmrc'), tokenLine);
-  write(join(lib, 'docs', '.npmrc'), tokenLine); // not a package folder: ignored
+
+  // Not a package folder: ignored.
+  write(join(lib, 'docs', '.npmrc'), tokenLine);
+
   write(join(tools, '.npmrc'), `${tokenLine}//npm.other.com/:_authToken=${OLD_TOKEN}\n`);
 
   const dryRun = testContext({ cwd: root, stateDir });

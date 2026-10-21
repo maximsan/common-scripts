@@ -8,7 +8,8 @@
 import { COMMANDS } from './lib/commands/index.mjs';
 import { EXIT_OK, EXIT_REFUSED, HELP_FLAGS, runCommand } from './lib/shared/index.mjs';
 
-const ARGS_START = 2; // process.argv holds node and this file first
+// `process.argv` holds node and this file first.
+const ARGS_START = 2;
 
 const NAME_WIDTH = Math.max(...Object.keys(COMMANDS).map((name) => name.length));
 

@@ -15,7 +15,9 @@ test('isInside: strict containment only', () => {
   assert.equal(isInside('/a/b', '/a/b'), false);
   assert.equal(isInside('/a/b', '/a/bc'), false);
   assert.equal(isInside('/a/b', '/a/b/../x'), false);
-  assert.equal(isInside('/a/b', '/a/b/..foo'), true); // a folder literally named "..foo"
+
+  // A folder literally named "..foo".
+  assert.equal(isInside('/a/b', '/a/b/..foo'), true);
 });
 
 test('Windows rules: paths ignore letter case and drives differ', () => {

@@ -73,6 +73,16 @@ export default [
       '@stylistic/max-len': ['error', { code: MAX_LINE_LENGTH, ignoreUrls: true }],
       '@stylistic/padding-line-between-statements': ['error', ...PADDING_LINES],
 
+      // A comment sits on its own line above the code it explains, after a blank line.
+      '@stylistic/line-comment-position': ['error', { position: 'above' }],
+      '@stylistic/lines-around-comment': ['error', {
+        beforeLineComment: true,
+        allowBlockStart: true,
+        allowObjectStart: true,
+        allowArrayStart: true,
+        allowClassStart: true,
+      }],
+
       'id-length': ['error', { min: MIN_NAME_LENGTH, properties: 'never' }],
       'id-denylist': ['error', ...UNCLEAR_NAMES],
       'no-restricted-syntax': ['error', ...NO_INLINE_VALUES, ...NO_PLATFORM_CHECKS],
@@ -85,6 +95,7 @@ export default [
         contexts: ['VariableDeclarator > ArrowFunctionExpression', 'VariableDeclarator > FunctionExpression'],
       }],
       'jsdoc/require-description': 'error',
+
       // Types are checked by `npm run typecheck`, which knows Node's types; this rule doesn't.
       'jsdoc/no-undefined-types': 'off',
     },

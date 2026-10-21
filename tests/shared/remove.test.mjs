@@ -30,7 +30,9 @@ test('safeRemoveTree removes links but never their targets', async () => {
   write(join(outside, 'precious.txt'), 'keep me');
   write(join(target, 'pkg', 'index.js'));
   write(join(target, 'pkg', 'deep', 'a', 'b', 'c.js'));
-  linkFolder(outside, join(target, 'linked-dir')); // like a workspace junction
+
+  // Like a workspace junction.
+  linkFolder(outside, join(target, 'linked-dir'));
 
   if (!FILE_LINK_SKIP) {
     symlinkSync(join(outside, 'precious.txt'), join(target, 'linked-file'));
@@ -63,15 +65,20 @@ test('a file that cannot be deleted keeps its mode, so a hard link outside the f
   write(store);
   chmodSync(store, PRIVATE_FILE_MODE);
   mkdirSync(locked, { recursive: true });
-  linkSync(store, join(locked, 'file')); // like a pnpm store file linked into node_modules
-  chmodSync(locked, READ_ONLY_FOLDER_MODE); // its folder refuses deletion
+
+  // Like a pnpm store file linked into node_modules.
+  linkSync(store, join(locked, 'file'));
+
+  // Its folder refuses deletion.
+  chmodSync(locked, READ_ONLY_FOLDER_MODE);
 
   try {
     await safeRemoveTree(join(boundary, 'target'), boundary);
     assert.equal(statSync(store).mode & MODE_BITS, PRIVATE_FILE_MODE);
   } finally {
     for (const name of readdirSync(boundary).filter((entry) => entry.startsWith('target'))) {
-      chmodSync(join(boundary, name, 'locked'), OPEN_FOLDER_MODE); // renamed before deleting; let cleanup in
+      // Renamed before deleting; let cleanup in.
+      chmodSync(join(boundary, name, 'locked'), OPEN_FOLDER_MODE);
     }
   }
 });
