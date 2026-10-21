@@ -25,7 +25,7 @@ test('dry run changes nothing; typos are refused; a "no" cancels; a "yes" delete
 
   const dryRun = testContext({ cwd: root, stateDir });
 
-  assert.equal(await main([], dryRun.context), 0);
+  assert.equal(await main(['--dry-run'], dryRun.context), 0);
   assert.match(dryRun.output(), /Dry run: nothing changed/);
   assert.match(dryRun.output(), /lib\/packages\/ui\/node_modules/);
   assert.equal(existsSync(join(app, 'node_modules', 'big.js')), true);
@@ -34,20 +34,20 @@ test('dry run changes nothing; typos are refused; a "no" cancels; a "yes" delete
 
   const declined = testContext({ cwd: root, stateDir, answer: false });
 
-  assert.equal(await main(['--apply'], declined.context), 0);
+  assert.equal(await main([], declined.context), 0);
   assert.match(declined.output(), /Cancelled/);
   assert.equal(existsSync(join(app, 'node_modules')), true);
 
   const confirmed = testContext({ cwd: root, stateDir });
 
-  assert.equal(await main(['2', '--apply'], confirmed.context), 0, confirmed.output());
+  assert.equal(await main(['2'], confirmed.context), 0, confirmed.output());
   assert.match(confirmed.output(), /Done: 2 item\(s\), all ok/);
   assert.equal(existsSync(join(app, 'node_modules')), false);
   assert.equal(existsSync(join(lib, 'packages', 'ui', 'node_modules')), false);
   assert.equal(existsSync(join(app, 'index.js')), true);
 });
 
-test('--apply lists every node_modules on its own line and deletes only the picked ones', async () => {
+test('the pick list shows every node_modules on its own line and deletes only the picked ones', async () => {
   const root = join(workspace, 'picked');
   const app = makeRepo(root, 'app');
   const lib = makeRepo(root, 'lib');
@@ -59,7 +59,7 @@ test('--apply lists every node_modules on its own line and deletes only the pick
 
   const picked = testContext({ cwd: root, stateDir, picks: [0, 2] });
 
-  assert.equal(await main(['--apply'], picked.context), 0, picked.output());
+  assert.equal(await main([], picked.context), 0, picked.output());
   assert.match(picked.output(), /^lib\/packages\/ui\/node_modules {2}1 B$/m);
   assert.equal(existsSync(join(app, 'node_modules')), false);
   assert.equal(existsSync(join(lib, 'node_modules')), true);
@@ -81,18 +81,18 @@ test('--only takes repo names and folder paths; a name that matches nothing chan
 
   const dryRun = testContext({ cwd: root, stateDir });
 
-  assert.equal(await main(['--only', 'app,lib\\packages\\ui\\node_modules/'], dryRun.context), 0);
+  assert.equal(await main(['--only', 'app,lib\\packages\\ui\\node_modules/', '--dry-run'], dryRun.context), 0);
   assert.match(dryRun.output(), /app\/node_modules/);
   assert.match(dryRun.output(), /lib\/packages\/ui\/node_modules/);
   assert.doesNotMatch(dryRun.output(), /lib\/node_modules|web\//);
-  assert.match(dryRun.output(), /devkit nmclean --only app,lib.* --apply/);
+  assert.match(dryRun.output(), /devkit nmclean --only app,lib\S* --yes/);
 
-  await assert.rejects(main(['--only', 'app,wbe', '--apply', '--yes'], dryRun.context), /no repo .*: wbe/);
+  await assert.rejects(main(['--only', 'app,wbe', '--yes'], dryRun.context), /no repo .*: wbe/);
   assert.equal(existsSync(join(app, 'node_modules')), true);
 
   const applied = testContext({ cwd: root, stateDir });
 
-  assert.equal(await main(['--only', 'lib', '--apply', '--yes'], applied.context), 0, applied.output());
+  assert.equal(await main(['--only', 'lib', '--yes'], applied.context), 0, applied.output());
   assert.equal(existsSync(join(lib, 'node_modules')), false);
   assert.equal(existsSync(join(lib, 'packages', 'ui', 'node_modules')), false);
   assert.equal(existsSync(join(app, 'node_modules')), true);
@@ -122,19 +122,19 @@ test('in a terminal, a plain run picks and confirms; --dry-run only looks', asyn
   assert.equal(existsSync(join(lib, 'node_modules')), false);
 });
 
-test('as a process: refuses --apply without a terminal, deletes with --apply --yes', () => {
+test('as a process: without a terminal only the plan is printed; --yes deletes', () => {
   const root = join(workspace, 'process');
   const app = makeRepo(root, 'app');
 
   write(join(app, 'node_modules', 'a.js'));
 
-  const refused = runCli(['nmclean', '--apply'], { cwd: root, stateDir });
+  const looked = runCli(['nmclean'], { cwd: root, stateDir });
 
-  assert.equal(refused.status, 2);
-  assert.match(refused.stderr, /No interactive terminal/);
+  assert.equal(looked.status, 0, looked.stderr);
+  assert.match(looked.stdout, /Dry run: nothing changed/);
   assert.equal(existsSync(join(app, 'node_modules')), true);
 
-  const applied = runCli(['nmclean', '--apply', '--yes'], { cwd: root, stateDir });
+  const applied = runCli(['nmclean', '--yes'], { cwd: root, stateDir });
 
   assert.equal(applied.status, 0, applied.stdout + applied.stderr);
   assert.match(applied.stdout, /^ok {4}app\/node_modules/m);

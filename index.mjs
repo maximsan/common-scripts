@@ -20,7 +20,7 @@ const HELP = `Repo maintenance commands. Run them from the folder that holds you
 
 ${LABELS.map(({ label, summary }) => `  ${label.padEnd(LABEL_WIDTH)}  ${summary}`).join('\n')}
 
-All except pull only print a plan (a dry run) until you add --apply. Each command has --help.
+In a terminal, all except pull print the plan, then let you pick and confirm. Each command has --help.
 `;
 
 const [name, ...argv] = process.argv.slice(ARGS_START);

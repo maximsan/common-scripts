@@ -48,16 +48,16 @@ test('maskToken shows the first and last 4 characters only for tokens longer tha
 });
 
 test('parseCommandLine: the token comes first, even when it looks like a job count', () => {
-  assert.equal(parseCommandLine(['345', '--apply']).token, '345');
-  assert.equal(parseCommandLine(['345', '--apply']).options.apply, true);
+  assert.equal(parseCommandLine(['345', '--yes']).token, '345');
+  assert.equal(parseCommandLine(['345', '--yes']).options.yes, true);
   assert.equal(parseCommandLine(['--help']).options.help, true);
 
-  for (const bad of [[], ['--apply'], ['two words'], ['token', '--aply']]) {
+  for (const bad of [[], ['--yes'], ['two words'], ['token', '--yse']]) {
     assert.throws(() => parseCommandLine(bad), /token|Unknown option/);
   }
 });
 
-test('dry run lists every file, --apply updates them, and the full token never appears in output or log', async () => {
+test('dry run lists every file, a run updates them, and the full token never appears in output or log', async () => {
   const root = join(workspace, 'repos');
   const app = makeRepo(root, 'app');
   const lib = makeRepo(root, 'lib');
@@ -75,7 +75,7 @@ test('dry run lists every file, --apply updates them, and the full token never a
 
   const dryRun = testContext({ cwd: root, stateDir });
 
-  assert.equal(await main([NEW_TOKEN], dryRun.context), 0);
+  assert.equal(await main([NEW_TOKEN, '--dry-run'], dryRun.context), 0);
 
   const planned = dryRun.output();
 
@@ -89,7 +89,7 @@ test('dry run lists every file, --apply updates them, and the full token never a
   const applied = testContext({ cwd: root, stateDir });
   const newLine = tokenLine.replace(OLD_TOKEN, NEW_TOKEN);
 
-  assert.equal(await main([NEW_TOKEN, '--apply'], applied.context), 0, applied.output());
+  assert.equal(await main([NEW_TOKEN], applied.context), 0, applied.output());
   assert.match(applied.output(), /ok {4}app\/\.npmrc +now npm_\*{12}2222/);
   assert.match(applied.output(), /ok {4}lib\/packages\/ui\/\.npmrc +now npm_\*{12}2222/);
   assert.equal(readFileSync(join(app, '.npmrc'), 'utf8'), newLine);
@@ -118,7 +118,7 @@ test('a .npmrc that is a link is left alone, so a user-wide file is never change
 
   const applied = testContext({ cwd: root, stateDir });
 
-  assert.equal(await main([NEW_TOKEN, '--apply'], applied.context), 0, applied.output());
+  assert.equal(await main([NEW_TOKEN], applied.context), 0, applied.output());
   assert.match(applied.output(), /keep {2}lib\/\.npmrc .*symlink/);
   assert.equal(readFileSync(shared, 'utf8'), tokenLine);
 });

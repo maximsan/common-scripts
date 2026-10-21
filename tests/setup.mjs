@@ -32,7 +32,7 @@ export function tempWorkspace(prefix) {
 
 /**
  * Run index.mjs as a child process, with its state (lock, logs) in `stateDir`.
- * @param {string[]} args  command-line arguments: the command, then its options, e.g. ["nmclean", "--apply"]
+ * @param {string[]} args  command-line arguments: the command, then its options, e.g. ["nmclean", "--yes"]
  * @param {{ cwd: string, stateDir: string, env?: Record<string, string>, entry?: string }} options
  *   the folder to run in, where state goes, extra environment variables, and the file node starts
  *   (index.mjs, or a link to it)
@@ -56,11 +56,11 @@ export function runCli(args, { cwd, stateDir, env = {}, entry = INDEX_PATH }) {
  *   interactive?: boolean,
  * }} options
  *   the folder to run in, where state goes, the temp folder, the answer to "continue?", the picked
- *   indexes (null: every line), and whether a person can answer, as in a terminal
+ *   indexes (null: every line), and whether a person can answer, as in a terminal (the default)
  * @returns {{ context: import('../lib/shared/index.mjs').RunContext, output: () => string }}
  *   the context, and everything printed so far as one text
  */
-export function testContext({ cwd, stateDir, tempDir = tmpdir(), answer = true, picks = null, interactive = false }) {
+export function testContext({ cwd, stateDir, tempDir = tmpdir(), answer = true, picks = null, interactive = true }) {
   /** @type {string[]} */
   const lines = [];
   const context = {

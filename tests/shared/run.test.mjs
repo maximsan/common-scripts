@@ -14,7 +14,7 @@ after(cleanup);
 test('planAndRun attempts every item, returns exit code 1 on a failure, and refuses while locked', async () => {
   const stateDir = join(workspace, 'state');
   const { context } = testContext({ cwd: workspace, stateDir });
-  const options = { apply: true, yes: false, dryRun: false, help: false, jobs: 2 };
+  const options = { yes: false, dryRun: false, help: false, jobs: 2 };
 
   /** @type {import('../../lib/shared/run.mjs').PlanItem[]} */
   const items = [
@@ -46,7 +46,7 @@ test('planAndRun attempts every item, returns exit code 1 on a failure, and refu
   await assert.rejects(whileLocked, /Another devkit script is running/);
 });
 
-test('with --apply, only the picked groups run; nothing picked changes nothing; --yes skips the list', async () => {
+test('in a terminal, only the picked groups run; nothing picked changes nothing; --yes skips the list', async () => {
   const stateDir = join(workspace, 'pick-state');
 
   /** @type {string[]} */
@@ -69,7 +69,7 @@ test('with --apply, only the picked groups run; nothing picked changes nothing; 
     },
   });
   const sections = [{ title: 'test', items: [item('a/1', 'a'), item('a/2', 'a'), item('b/1', 'b')] }];
-  const options = { apply: true, yes: false, dryRun: false, help: false, jobs: 1 };
+  const options = { yes: false, dryRun: false, help: false, jobs: 1 };
 
   /**
    * Run the plan with these picks.
@@ -105,9 +105,9 @@ test('a dry run ends with the commands that act on it', async () => {
   const { context, output } = testContext({ cwd: workspace, stateDir: join(workspace, 'hint-state') });
   const items = [{ name: 'one', skip: null, run: async () => ({ ok: true, output: '' }) }];
   const sections = [{ title: 'test', items }];
-  const options = { apply: false, yes: false, dryRun: false, help: false, jobs: 1 };
+  const options = { yes: false, dryRun: true, help: false, jobs: 1 };
 
   await planAndRun({ sections, options, verb: 'run', command: 'devclean', args: ['--days', '60'], context });
-  assert.match(output(), /^ {2}devkit devclean --days 60 {16}pick and confirm, in a terminal$/m);
-  assert.match(output(), /^ {2}devkit devclean --days 60 --apply --yes {2}everything, without questions$/m);
+  assert.match(output(), /^ {2}devkit devclean --days 60 {8}pick and confirm, in a terminal$/m);
+  assert.match(output(), /^ {2}devkit devclean --days 60 --yes {2}everything, without questions$/m);
 });

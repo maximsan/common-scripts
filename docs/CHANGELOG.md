@@ -6,7 +6,13 @@ What changed in each version of the package that `npm pack` builds. The newest v
 
 ### Changed
 
-- In a terminal, `nmclean`, `install`, `devclean` and `token` no longer stop after the plan: they show the pick list and ask for "yes" right away, so `--apply` is no longer needed there. Esc or any answer other than "yes" changes nothing. Without a terminal they still only print the plan. See [decision 3](adr/0003-confirm-no-schedule.md).
+- In a terminal, `nmclean`, `install`, `devclean` and `token` no longer stop after the plan: they show the pick list and ask for "yes" right away. Esc or any answer other than "yes" changes nothing. Without a terminal they still only print the plan. See [decision 3](adr/0003-confirm-no-schedule.md).
+- `--yes` alone now takes everything without questions, also without a terminal. It replaces `--apply --yes`.
+
+### Removed
+
+- `--apply`. Using it stops the run with a message that names `--yes` instead.
+- `devclean --build-days` and `--temp-days`. Build outputs and temp-folder entries always count as old after 7 days; `devclean --help` says so.
 
 ### Added
 

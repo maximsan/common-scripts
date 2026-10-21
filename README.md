@@ -67,10 +67,10 @@ Run the commands from your repos folder, for example `devkit nmclean`. Each comm
 Other ways to run them:
 
 - `--dry-run` only prints the plan. Without a terminal, for example when the output goes to a file, the commands only print the plan too.
-- `--apply --yes` takes everything, without the list and without the "yes". It is the only way to act where no person can answer.
+- `--yes` takes everything, without the list and without the "yes" question. It is the only way to act where no person can answer.
 - `nmclean --only` narrows the plan to repo names or folder paths as the plan shows them (`devkit nmclean --only ue-shared,ue-wof/node_modules`); `devclean --only` takes section names.
 
-If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--apply --yes` after reviewing the plan.
+If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--yes` after reviewing the plan.
 
 ### Updating the registry token
 
@@ -123,7 +123,7 @@ Set-Content "$t\work\app\package.json" "{}"
 cmd /c mklink /J "$t\work\app\node_modules\linked" "$t\outside"
 Set-Location "$t\work\app"; git init -q; Set-Content .gitignore "node_modules/"
 Set-Location "$t\work"
-devkit nmclean --apply --yes
+devkit nmclean --yes
 Test-Path "$t\outside\precious.txt"   # must be True
 Test-Path "$t\work\app\node_modules"  # must be False
 ```

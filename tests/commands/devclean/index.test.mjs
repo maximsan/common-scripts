@@ -31,7 +31,7 @@ test('applied cleanup removes old temp entries, records the run, and --due goes 
 
   const applied = testContext({ cwd: root, stateDir, tempDir });
 
-  assert.equal(await main(['--only', 'temp', '--apply'], applied.context), 0, applied.output());
+  assert.equal(await main(['--only', 'temp'], applied.context), 0, applied.output());
   assert.equal(existsSync(join(tempDir, 'old.tmp')), false);
   assert.equal(existsSync(join(tempDir, 'new.tmp')), true);
 

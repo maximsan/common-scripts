@@ -76,13 +76,13 @@ test('install runs npm ci after confirmation and leaves the lockfile unchanged',
 
   const dryRun = testContext({ cwd: root, stateDir });
 
-  assert.equal(await main([], dryRun.context), 0);
+  assert.equal(await main(['--dry-run'], dryRun.context), 0);
   assert.match(dryRun.output(), /npm ci/);
   assert.equal(existsSync(join(app, 'node_modules', 'stale.js')), true);
 
   const applied = testContext({ cwd: root, stateDir });
 
-  assert.equal(await main(['--apply'], applied.context), 0, applied.output());
+  assert.equal(await main([], applied.context), 0, applied.output());
   assert.equal(existsSync(join(app, 'node_modules', 'stale.js')), false);
   assert.equal(readFileSync(lockfile, 'utf8'), lockBefore);
 });
@@ -101,7 +101,7 @@ test('an existing node_modules that is a link or holds a nested repo is kept in 
 
   const { context, output } = testContext({ cwd: root, stateDir });
 
-  assert.equal(await main(['--apply'], context), 0, output());
+  assert.equal(await main([], context), 0, output());
   assert.match(output(), /keep {2}linked .*existing node_modules is a symlink\/junction/);
   assert.match(output(), /keep {2}nested .*existing node_modules contains a nested git repo/);
   assert.match(output(), /Nothing to do/);
