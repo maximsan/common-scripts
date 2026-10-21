@@ -77,9 +77,10 @@ export default [
       'id-denylist': ['error', ...UNCLEAR_NAMES],
       'no-restricted-syntax': ['error', ...NO_INLINE_VALUES, ...NO_PLATFORM_CHECKS],
 
-      // Every named function has a doc comment: declarations and functions stored in a constant.
-      // Inline callbacks are described by the code around them.
+      // Every exported function has a doc comment: other files use it without reading its body.
+      // A function used only in its own file gets one only when its name and code don't explain it.
       'jsdoc/require-jsdoc': ['error', {
+        publicOnly: true,
         require: { FunctionDeclaration: true },
         contexts: ['VariableDeclarator > ArrowFunctionExpression', 'VariableDeclarator > FunctionExpression'],
       }],
