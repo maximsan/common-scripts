@@ -14,7 +14,7 @@ The folder holds:
 
 - `index.mjs`: the one entry point. It starts a command by name: `node index.mjs nmclean --apply`.
 - `lib/`: all code.
-  - `lib/commands/`: one file per command.
+  - `lib/commands/`: one file per command. `lib/commands/index.mjs` lists them; a new command is one new file plus one line there.
   - `lib/shared/`: the shared code, one file per area. It holds the safety checks and the plan → confirm → run flow of `nmclean`, `nminstall`, `devclean` and `npmrctoken`, which import it only through `lib/shared/index.mjs`. `gpall` is standalone: it deletes nothing, so it needs none of those checks.
 - `tests/`: the tests, in `tests/commands/` and `tests/shared/` like the code they test. `tests/setup.mjs` prepares a test run; `tests/utils.mjs` builds files, repos and links for tests.
 
