@@ -18,6 +18,7 @@ The folder holds:
   - `lib/shared/`: the shared code, one file per area. It holds the safety checks and the plan → confirm → run flow of `nmclean`, `install`, `devclean` and `token`, which import it only through `lib/shared/index.mjs`. `pull` (`gpall.mjs`) is standalone: it deletes nothing, so it needs none of those checks. It imports only the status line, `lib/shared/progress.mjs`.
 - `docs/`: the [glossary](docs/GLOSSARY.md), the [safety model](docs/safety-model.md) and the [decisions](docs/adr/).
 - `AGENTS.md`: working rules for coding agents; `CLAUDE.md` loads it.
+- `tools/`: one-off diagnostics, run by hand. `tools/nmclean-timing.mjs` times each step of an `nmclean` dry run. They are not in the package and not linted.
 - `tests/`: the tests, in `tests/commands/` and `tests/shared/` like the code they test. `tests/setup.mjs` prepares a test run; `tests/utils.mjs` builds files, repos and links for tests.
 
 All the commands share these conventions:

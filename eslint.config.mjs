@@ -49,6 +49,8 @@ const PADDING_LINES = [
 ];
 
 export default [
+  // One-off diagnostics, run by hand and never shipped; the house rules cover the scripts and tests.
+  { ignores: ['tools/'] },
   eslintJs.configs.recommended,
   jsdoc.configs['flat/recommended-typescript-flavor-error'],
   stylistic.configs.customize({
