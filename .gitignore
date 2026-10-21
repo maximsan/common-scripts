@@ -1,2 +1,7 @@
 node_modules/
 *.tgz
+
+# Files the operating system creates in folders: macOS, then Windows.
+.DS_Store
+Thumbs.db
+desktop.ini
