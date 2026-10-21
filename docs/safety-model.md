@@ -8,7 +8,8 @@ The script stops with exit code 2 and changes nothing in:
 
 - drive roots, the filesystem root and network (UNC) paths;
 - your home folder;
-- system and app-data folders, such as `ProgramFiles` and `LOCALAPPDATA` on Windows, or `/usr` and `~/.config` on macOS and Linux.
+- system and app-data folders, such as `ProgramFiles` and `LOCALAPPDATA` on Windows, or `/usr` and `~/.config` on macOS and Linux;
+- on Windows, your OneDrive folders, because a deletion there also deletes the copy in the cloud.
 
 The full list for each system is in the [platform rules](GLOSSARY.md): the `protected…` fields of `PLATFORM_RULES` in `lib/shared/platform.mjs`.
 

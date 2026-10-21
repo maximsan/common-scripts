@@ -16,15 +16,24 @@ const ON_WINDOWS = HOST_RULES.name === 'win32';
 after(cleanup);
 
 test('Windows rules: drive roots, network paths, home and protected folders are refused', () => {
-  const env = { SystemRoot: 'C:\\Windows', APPDATA: 'C:\\Users\\me\\AppData\\Roaming' };
+  const env = {
+    SystemRoot: 'C:\\Windows',
+    APPDATA: 'C:\\Users\\me\\AppData\\Roaming',
+    OneDriveCommercial: 'C:\\Users\\me\\OneDrive - Company',
+  };
   const folders = protectedFolders(WINDOWS, { home: 'C:\\Users\\me', env });
   const where = { homeReal: 'C:\\Users\\me', folders, rules: WINDOWS };
 
-  assert.deepEqual(folders, [['SystemRoot', 'C:\\Windows'], ['APPDATA', 'C:\\Users\\me\\AppData\\Roaming']]);
+  assert.deepEqual(folders, [
+    ['SystemRoot', 'C:\\Windows'],
+    ['APPDATA', 'C:\\Users\\me\\AppData\\Roaming'],
+    ['OneDriveCommercial', 'C:\\Users\\me\\OneDrive - Company'],
+  ]);
   assert.match(rootProblems('C:\\', where).join(), /drive or filesystem root/);
   assert.match(rootProblems('\\\\server\\share\\repos', where).join(), /network/);
   assert.match(rootProblems('c:\\users\\ME', where).join(), /home folder/);
   assert.match(rootProblems('c:\\windows\\system32', where).join(), /inside SystemRoot/);
+  assert.match(rootProblems('C:\\Users\\me\\OneDrive - Company\\repos', where).join(), /inside OneDriveCommercial/);
   assert.deepEqual(rootProblems('C:\\Users\\me\\repos', where), []);
 });
 

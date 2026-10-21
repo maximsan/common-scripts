@@ -144,7 +144,7 @@ Keep `--init`. Without it, `node` is the container's first process, and ended ch
   - junction handling (run the check above);
   - the `taskkill` tree kill;
   - whether a file in use always blocks the rename.
-- OneDrive cloud-only files have not been tested. Keep repos outside OneDrive.
+- The scripts refuse to run inside a OneDrive folder, so keep your repos outside OneDrive. They find OneDrive through the `OneDrive…` environment variables that the OneDrive client sets; a OneDrive folder without them is not recognised.
 - Yarn 2+ caches are per project and may be committed to git, so they are never cleaned. pnpm and bun projects are skipped.
 
 ## Sources
