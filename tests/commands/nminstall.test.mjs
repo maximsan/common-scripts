@@ -115,7 +115,7 @@ test('as a process: prints the plan', () => {
 
   write(join(app, 'package-lock.json'), '{}');
 
-  const dryRun = runCli(['nminstall'], { cwd: root, stateDir });
+  const dryRun = runCli(['install'], { cwd: root, stateDir });
 
   assert.equal(dryRun.status, 0, dryRun.stderr);
   assert.match(dryRun.stdout, /do {4}app .*npm ci/);

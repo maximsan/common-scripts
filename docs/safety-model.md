@@ -1,6 +1,6 @@
 # Safety model
 
-These rules apply to `nmclean`, `nminstall`, `devclean` and `npmrctoken`. `gpall` only runs `git pull`.
+These rules apply to `nmclean`, `install`, `devclean` and `token`. `pull` only runs `git pull`.
 
 ## Where scripts refuse to run
 
@@ -25,9 +25,9 @@ A folder is deleted only if all of these hold. Such a folder is a [repo folder](
 
 The search never enters dot-folders (`.venv`, `.yarn`, …), `node_modules` or nested repos.
 
-Before `nminstall` installs a repo, it checks the `node_modules` folder at the repo root. It uses the same rules as for a [repo folder](GLOSSARY.md), because [`npm ci`](https://docs.npmjs.com/cli/v11/commands/npm-ci) deletes this folder and Yarn changes it. If the folder does not pass a check, the dry run shows it as kept, and `nminstall` does not install the repo.
+Before `install` installs a repo, it checks the `node_modules` folder at the repo root. It uses the same rules as for a [repo folder](GLOSSARY.md), because [`npm ci`](https://docs.npmjs.com/cli/v11/commands/npm-ci) deletes this folder and Yarn changes it. If the folder does not pass a check, the dry run shows it as kept, and `install` does not install the repo.
 
-`nminstall` does not check the `node_modules` folders of workspace packages. A workspace package is a package in a subfolder of the repo, with its own `package.json`. `npm ci` also deletes the contents of these folders.
+`install` does not check the `node_modules` folders of workspace packages. A workspace package is a package in a subfolder of the repo, with its own `package.json`. `npm ci` also deletes the contents of these folders.
 
 ## Links
 
@@ -59,7 +59,7 @@ Only [temp entries](GLOSSARY.md) with nothing newer than the cutoff are deleted.
 
 ## Token updates
 
-This applies to `npmrctoken` only.
+This applies to `token` only.
 
 - only the text after `=` in the `_authToken=` line changes; every other byte of the file stays the same, including line endings;
 - a file with more than one `_authToken=` line is left unchanged with a warning, since each registry probably needs its own token;

@@ -104,7 +104,7 @@ test('parseArgs: optional job count or --help; anything else is refused', () => 
 });
 
 test('as a process: --help prints the usage', () => {
-  const result = runCli(['gpall', '--help'], { cwd: root, stateDir: join(workspace, 'state') });
+  const result = runCli(['pull', '--help'], { cwd: root, stateDir: join(workspace, 'state') });
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /git pull --ff-only/);

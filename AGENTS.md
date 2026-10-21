@@ -19,9 +19,9 @@ The scripts themselves run on Node 18 and need no install. The Linux test run in
 
 ## Architecture
 
-- **One entry point.** `index.mjs` looks the command up in `lib/commands/index.mjs` (`COMMANDS`) and starts it through `runCommand` (`lib/shared/cli.mjs`). `runCommand` builds the [run context](docs/GLOSSARY.md) from the process and sets the exit code. A thrown `SafetyError` becomes exit code 2.
-- **Commands import the shared code only through `lib/shared/index.mjs`.** `gpall` is the exception: it imports nothing from `lib/shared/`, so a few helpers are copied there on purpose. Comments that say "keep in sync with gpall.mjs" mark them.
-- **Every command except gpall has the same shape:**
+- **One entry point.** `index.mjs` looks the command up in `lib/commands/index.mjs` (`COMMANDS`, where a command may also have aliases) and starts it through `runCommand` (`lib/shared/cli.mjs`). `runCommand` builds the [run context](docs/GLOSSARY.md) from the process and sets the exit code. A thrown `SafetyError` becomes exit code 2.
+- **Commands import the shared code only through `lib/shared/index.mjs`.** `pull` (`lib/commands/gpall.mjs`) is the exception: it imports nothing from `lib/shared/`, so a few helpers are copied there on purpose. Comments that say "keep in sync with gpall.mjs" mark them.
+- **Every command except pull has the same shape:**
   1. `parseArgs`;
   2. `findReposHere`, which refuses an unsafe current folder before it finds repos;
   3. build plan sections, whose items are `{ name, skip, run }`;

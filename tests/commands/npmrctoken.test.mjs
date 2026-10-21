@@ -129,7 +129,7 @@ test('as a process: prints the masked plan', () => {
 
   write(join(app, '.npmrc'), `//npm.example.com/:_authToken=${OLD_TOKEN}\n`);
 
-  const dryRun = runCli(['npmrctoken', NEW_TOKEN], { cwd: root, stateDir });
+  const dryRun = runCli(['token', NEW_TOKEN], { cwd: root, stateDir });
 
   assert.equal(dryRun.status, 0, dryRun.stderr);
   assert.match(dryRun.stdout, /do {4}app\/\.npmrc .*npm_\*{12}2222/);

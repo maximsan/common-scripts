@@ -17,7 +17,17 @@ test('without a command, or with --help, it lists every command', () => {
     const result = runCli(args, { cwd: workspace, stateDir });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /gpall .*nmclean .*nminstall .*devclean .*npmrctoken /s);
+    assert.match(result.stdout, /pull \(alias: gpall\) .*nmclean .*install \(alias: nminstall\) /s);
+    assert.match(result.stdout, /devclean .*token \(alias: npmrctoken\) /s);
+  }
+});
+
+test('an alias starts the same command as its name', () => {
+  for (const name of ['gpall', 'pull']) {
+    const result = runCli([name, '--help'], { cwd: workspace, stateDir });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /devkit pull \[jobs\]/);
   }
 });
 
