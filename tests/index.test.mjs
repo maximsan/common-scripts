@@ -1,5 +1,4 @@
 // @ts-check
-// Tests for index.mjs, the one entry point.  Run:  node --test tests/index.test.mjs
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';

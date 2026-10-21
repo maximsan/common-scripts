@@ -1,5 +1,4 @@
 // @ts-check
-// Tests for lib/shared/processes.mjs.  Run:  node --test tests/shared/processes.test.mjs
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';

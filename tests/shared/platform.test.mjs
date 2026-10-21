@@ -1,5 +1,4 @@
 // @ts-check
-// Tests for lib/shared/platform.mjs.  Run:  node --test tests/shared/platform.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

@@ -29,8 +29,7 @@ const NO_INLINE_VALUES = [
   },
 ];
 
-// Every difference between operating systems is read from the platform rules (PLATFORM_RULES in
-// lib/shared/platform.mjs), never from the system directly. Only the line that builds HOST_RULES reads it.
+// Operating-system differences come only from the platform rules: docs/adr/0005-platform-rules-table.md.
 const PLATFORM_MESSAGE = 'Read operating-system differences from PLATFORM_RULES in lib/shared/platform.mjs.';
 const NO_PLATFORM_CHECKS = [
   { selector: 'MemberExpression[object.name="process"][property.name="platform"]', message: PLATFORM_MESSAGE },

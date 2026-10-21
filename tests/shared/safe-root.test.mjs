@@ -1,5 +1,4 @@
 // @ts-check
-// Tests for lib/shared/safe-root.mjs.  Run:  node --test tests/shared/safe-root.test.mjs
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';

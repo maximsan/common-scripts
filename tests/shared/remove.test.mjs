@@ -1,5 +1,4 @@
 // @ts-check
-// Tests for lib/shared/remove.mjs.  Run:  node --test tests/shared/remove.test.mjs
 // Folder links are junctions on Windows and symlinks elsewhere (see linkFolder in tests/utils.mjs).
 
 import { test, after } from 'node:test';

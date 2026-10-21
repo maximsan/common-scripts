@@ -1,6 +1,4 @@
 // @ts-check
-// Tests for lib/commands/gpall.mjs.  Run:  node --test tests/commands/gpall.test.mjs
-//
 // Builds real repositories in a temp folder: one shared "remote" plus clones in
 // different states, then checks that every repo is attempted and classified correctly.
 

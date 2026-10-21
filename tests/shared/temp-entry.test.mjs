@@ -1,5 +1,4 @@
 // @ts-check
-// Tests for lib/shared/temp-entry.mjs.  Run:  node --test tests/shared/temp-entry.test.mjs
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';

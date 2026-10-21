@@ -1,5 +1,4 @@
 // @ts-check
-// Tests for lib/commands/npmrctoken.mjs.  Run:  node --test tests/commands/npmrctoken.test.mjs
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';

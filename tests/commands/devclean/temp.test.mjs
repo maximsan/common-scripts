@@ -1,5 +1,4 @@
 // @ts-check
-// Tests for lib/commands/devclean/temp.mjs.  Run:  node --test tests/commands/devclean/temp.test.mjs
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';

@@ -8,10 +8,9 @@ The script stops with exit code 2 and changes nothing in:
 
 - drive roots, the filesystem root and network (UNC) paths;
 - your home folder;
-- Windows: anything inside `SystemRoot`, `ProgramFiles`, `ProgramData`, `APPDATA` or `LOCALAPPDATA`;
-- macOS and Linux: anything inside the system folders (`/usr`, `/etc`, `/opt`, `/System`, `/Library` and the like) or inside `~/Library`, `~/.cache`, `~/.config` or `~/.local`.
+- system and app-data folders, such as `ProgramFiles` and `LOCALAPPDATA` on Windows, or `/usr` and `~/.config` on macOS and Linux.
 
-`/var` is not on the list, because macOS keeps each user's temp folder there.
+The full list for each system is in the [platform rules](GLOSSARY.md): the `protected…` fields of `PLATFORM_RULES` in `lib/shared/platform.mjs`.
 
 ## What may be deleted in a repo
 
@@ -47,11 +46,7 @@ macOS and Linux allow renaming and deleting files that are in use. There, a fold
 
 ## Temp folder
 
-This applies to `devclean` only. The temp folder must be where the system normally keeps it, or a subfolder:
-
-- Windows: `%USERPROFILE%\AppData\Local\Temp`;
-- macOS: `/private/var/folders` (each user's own temp folder) or `/private/tmp`;
-- Linux: `/tmp` or `/var/tmp`.
+This applies to `devclean` only. The temp folder must be where the system normally keeps it, or a subfolder. The places for each system are in the `tempHomes` field of `PLATFORM_RULES` in `lib/shared/platform.mjs`.
 
 Only [temp entries](GLOSSARY.md) with nothing newer than the cutoff are deleted. Every rule is checked again right before each deletion. These temp entries are kept:
 
@@ -87,4 +82,4 @@ Background: [Node.js April 2024 security release (CVE-2024-27980)](https://nodej
 
 ## Agent files are never deleted
 
-`devclean` lists untracked files per repo (where agent scratch files show up) and the size of `~/.claude`. Claude Code deletes its own session data after `cleanupPeriodDays` (default 30). Use `claude project purge <path> --dry-run` for projects you no longer use. See [Claude Code: the .claude directory](https://code.claude.com/docs/en/claude-directory.md).
+`devclean` lists untracked files per repo (where agent scratch files show up) and the size of `~/.claude`. Claude Code deletes its own session data after `cleanupPeriodDays`. Use `claude project purge <path> --dry-run` for projects you no longer use. See [Claude Code: the .claude directory](https://code.claude.com/docs/en/claude-directory.md).

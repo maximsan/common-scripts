@@ -44,7 +44,7 @@ Run the commands from your repos folder, for example `devkit nmclean`. Each comm
 
 ### Updating the registry token
 
-`npmrctoken` takes the new token as its first argument. Tokens are always shown masked: the first and last 4 characters, with stars in between.
+`npmrctoken` takes the new token as its first argument. Tokens are always shown masked, as in the example below.
 
 ```bash
 devkit npmrctoken npm_NewToken1234XyZ9            # dry run: lists every .npmrc and what would change
@@ -62,7 +62,7 @@ The token you type is saved in your shell history. Clear that line from the hist
 
 ## Workflow
 
-There is no scheduled task on purpose. A Cloud PC may be powered off when you are not connected, and an unattended job would delete files without anyone reviewing the plan. Instead, `--due` reminds you when you open a terminal, and you run the cleanup yourself.
+There is no scheduled task ([decision 3](docs/adr/0003-dry-run-no-schedule.md)). Instead, `--due` reminds you when you open a terminal, and you run the cleanup yourself.
 
 ```mermaid
 flowchart LR
@@ -122,11 +122,9 @@ docker run --rm --init -u node -v "$PWD":/work:ro -w /work node:22 node --test
 
 Keep `--init`. Without it, `node` is the container's first process, and ended child processes are never cleared away. The test that kills a timed-out command then fails.
 
-The tests pass on macOS and on Linux. They have not been run on Windows. The Windows path rules, protected folders, temp-folder location and child environment are still tested there, through the Windows entry of the platform rules.
-
 ## Known limits
 
-- **Not verified on Windows.** The tests can't reproduce these Windows behaviours, because they need a real Windows disk or process:
+- **The tests have not been run on Windows.** They pass on macOS and Linux, where the Windows entry of the platform rules is tested too. These Windows behaviours need a real Windows disk or process:
   - junction handling (run the check above);
   - the `taskkill` tree kill;
   - whether a file in use always blocks the rename.

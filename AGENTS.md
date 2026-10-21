@@ -27,7 +27,7 @@ The scripts themselves run on Node 18 and need no install. The Linux test run in
   3. build plan sections, whose items are `{ name, skip, run }`;
   4. `planAndRun`, which prints the plan, stops there without `--apply`, asks for confirmation, takes the lock, runs the items in a pool and writes the log.
 - **Check and remove come in pairs.** The plan calls the check (`checkRepoFolder`, `checkTempEntry`). Each item's `run` calls the matching remove (`removeRepoFolder`, `removeTempEntry`), which runs the check again first. Every folder deletion ends in `safeRemoveTree` (`lib/shared/remove.mjs`): it renames the folder, validates it again, then deletes. Never delete through any other path.
-- **Operating-system differences live only in `PLATFORM_RULES`** (`lib/shared/platform.mjs`); lint rejects `process.platform` elsewhere. Functions that touch no disk take a `rules` argument, so the tests check the Windows rules on macOS and Linux. How to add a difference is written above the type.
+- **Operating-system differences live only in `PLATFORM_RULES`** (`lib/shared/platform.mjs`, [decision 5](docs/adr/0005-platform-rules-table.md)). How to add one is written above the `PlatformRules` type.
 - **Tests mirror `lib/`** in `tests/commands/` and `tests/shared/`. `tests/setup.mjs`:
   - `testContext` calls a command's `main` in the same process, with its own run context;
   - `runCli` starts `index.mjs` as a separate process;

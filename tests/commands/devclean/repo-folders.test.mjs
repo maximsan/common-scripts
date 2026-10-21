@@ -1,5 +1,4 @@
 // @ts-check
-// Tests for lib/commands/devclean/repo-folders.mjs.  Run:  node --test tests/commands/devclean/repo-folders.test.mjs
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';

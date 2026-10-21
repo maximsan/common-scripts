@@ -1,5 +1,4 @@
 // @ts-check
-// Tests for lib/shared/repo-folder.mjs.  Run:  node --test tests/shared/repo-folder.test.mjs
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
