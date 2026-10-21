@@ -12,7 +12,7 @@ const NAME_WIDTH = Math.max(...Object.keys(COMMANDS).map((name) => name.length))
 
 const HELP = `Repo maintenance commands. Run them from the folder that holds your git repos.
 
-  devkit <command> [options]      (without npm link: node index.mjs <command> [options])
+  devkit <command> [options]      (or: node index.mjs <command> [options])
 
 ${Object.entries(COMMANDS).map(([name, { summary }]) => `  ${name.padEnd(NAME_WIDTH)}  ${summary}`).join('\n')}
 

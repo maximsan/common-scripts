@@ -30,15 +30,31 @@ All the commands share these conventions:
 
 ## Setup
 
-1. Copy this folder to `~/scripts/`, outside OneDrive. The commands need `index.mjs`, `lib/` and `package.json`. The `tests/` folder and the check tooling are only for running the tests.
-2. In that folder, run `npm link` once. It adds the command `devkit` for your user, in Git Bash, PowerShell and cmd alike. It installs nothing else. Check it with `devkit --help`.
-3. Optional: to see a reminder when a cleanup is due, add this line to your shell's startup file (`~/.bashrc` for Git Bash and most Linux shells, `~/.zshrc` on macOS):
+The scripts travel as one package file. Nothing is published to a registry: `"private": true` in `package.json` makes npm refuse to publish.
+
+1. In this repo, build the package:
+
+   ```bash
+   npm pack    # writes common-scripts-<version>.tgz with index.mjs, lib/, package.json and this README
+   ```
+
+2. Copy the `.tgz` file to the machine where you want the commands, for example the Cloud PC.
+3. On that machine, install it:
+
+   ```bash
+   npm install -g ./common-scripts-1.0.0.tgz
+   ```
+
+   This adds the command `devkit` for your user, in Git Bash, PowerShell and cmd alike. It needs no administrator rights: on Windows, npm installs into `%AppData%\npm` ([npm folders](https://docs.npmjs.com/cli/v11/configuring-npm/folders)). It downloads nothing, because the package has no dependencies. Check it with `devkit --help`.
+4. Optional: to see a reminder when a cleanup is due, add this line to your shell's startup file (`~/.bashrc` for Git Bash and most Linux shells, `~/.zshrc` on macOS):
 
    ```bash
    devkit devclean --due
    ```
 
-Without `npm link`, `node ~/scripts/index.mjs` works the same way as `devkit`.
+To update, raise `version` in `package.json`, build the package again, and install the new file the same way. It replaces the installed version.
+
+While you work on the scripts, run `npm link` once in this repo instead. `devkit` then runs the code in the repo directly, so every change takes effect without a new package.
 
 Run the commands from your repos folder, for example `devkit nmclean`. Each command has `--help`. `nmclean`, `nminstall`, `devclean` and `npmrctoken` only print a plan (a dry run); add `--apply` to act on it. If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--yes` after reviewing the dry run.
 
@@ -93,7 +109,7 @@ Set-Content "$t\work\app\package.json" "{}"
 cmd /c mklink /J "$t\work\app\node_modules\linked" "$t\outside"
 Set-Location "$t\work\app"; git init -q; Set-Content .gitignore "node_modules/"
 Set-Location "$t\work"
-node "$HOME\scripts\index.mjs" nmclean --apply --yes
+devkit nmclean --apply --yes
 Test-Path "$t\outside\precious.txt"   # must be True
 Test-Path "$t\work\app\node_modules"  # must be False
 ```
