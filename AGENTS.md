@@ -1,7 +1,7 @@
 # Working in this repo
 
 - **Windows 365 Cloud PC first.** The scripts are built for a Windows 365 Cloud PC: the user has no administrator rights and probably no Developer Mode. Weigh every finding and check against that machine first, then macOS and Linux.
-- **Docs live in `docs/`.** Terms: [docs/GLOSSARY.md](docs/GLOSSARY.md). What the scripts refuse, check and keep: [docs/safety-model.md](docs/safety-model.md). Decisions: [docs/adr/](docs/adr/), one file per decision. The README is the owner's cheat sheet: commands, setup and links.
+- **Docs live in `docs/`.** Terms: [docs/GLOSSARY.md](docs/GLOSSARY.md). What the scripts refuse, check and keep: [docs/safety-model.md](docs/safety-model.md). Decisions: [docs/adr/](docs/adr/), one file per decision. Changes per version: [docs/CHANGELOG.md](docs/CHANGELOG.md); a change a user notices gets a line there. The README is the owner's cheat sheet: commands, setup and links.
 - **Done means `npm run check` passes.** The house rules, each with its reason, are in `eslint.config.mjs`.
 
 ## Commands

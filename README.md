@@ -16,7 +16,7 @@ The folder holds:
 - `lib/`: all code.
   - `lib/commands/`: one file per command; `devclean` has a folder with one file per section. `lib/commands/index.mjs` lists the commands; a new command is one new file plus one line there.
   - `lib/shared/`: the shared code, one file per area. It holds the safety checks and the plan → confirm → run flow of `nmclean`, `install`, `devclean` and `token`, which import it only through `lib/shared/index.mjs`. `pull` (`gpall.mjs`) is standalone: it deletes nothing, so it needs none of those checks. It imports only the status line, `lib/shared/progress.mjs`.
-- `docs/`: the [glossary](docs/GLOSSARY.md), the [safety model](docs/safety-model.md) and the [decisions](docs/adr/).
+- `docs/`: the [glossary](docs/GLOSSARY.md), the [safety model](docs/safety-model.md), the [decisions](docs/adr/) and the [changelog](docs/CHANGELOG.md).
 - `AGENTS.md`: working rules for coding agents; `CLAUDE.md` loads it.
 - `tools/`: one-off diagnostics, run by hand. `tools/nmclean-timing.mjs` times each step of an `nmclean` dry run. They are not in the package and not linted.
 - `tests/`: the tests, in `tests/commands/` and `tests/shared/` like the code they test. `tests/setup.mjs` prepares a test run; `tests/utils.mjs` builds files, repos and links for tests.
@@ -54,7 +54,7 @@ The scripts travel as one package file. Nothing is published to a registry: `"pr
    devkit devclean --due
    ```
 
-To update, raise `version` in `package.json`, build the package again, and install the new file the same way. It replaces the installed version.
+To update, raise `version` in `package.json` and add the changes to [docs/CHANGELOG.md](docs/CHANGELOG.md), build the package again, and install the new file the same way. It replaces the installed version.
 
 While you work on the scripts, run `npm link` once in this repo instead. `devkit` then runs the code in the repo directly, so every change takes effect without a new package.
 
