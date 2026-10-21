@@ -263,7 +263,7 @@ export async function main(argv, context) {
     return EXIT_OK;
   }
 
-  const root = await assertSafeRoot(context.cwd);
+  const root = await assertSafeRoot(context.cwd, { env: context.env });
   const repos = await findRepos(root);
   const title = `Installs for ${repos.length} repo(s) under ${root} (replaces ${NODE_MODULES}, runs install scripts)`;
   const { code } = await planAndRun({

@@ -35,7 +35,7 @@ export async function main(argv, context) {
     return EXIT_OK;
   }
 
-  const root = await assertSafeRoot(context.cwd);
+  const root = await assertSafeRoot(context.cwd, { env: context.env });
   const repos = await findRepos(root);
   const items = await planFolders(repos, [NODE_MODULES], options);
   const { code } = await planAndRun({

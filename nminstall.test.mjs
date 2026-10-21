@@ -3,10 +3,10 @@
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { detectPackageManager, main } from './nminstall.mjs';
-import { makeRepo, runScript, tempWorkspace, testContext, write } from './test-helpers.mjs';
+import { linkFolder, makeRepo, runScript, tempWorkspace, testContext, write } from './test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('nminstall');
 const stateDir = join(workspace, 'state');
@@ -95,7 +95,7 @@ test('an existing node_modules that is a link or holds a nested repo is kept in 
 
   write(join(linked, 'package-lock.json'), '{}');
   write(join(shared, 'keep.js'));
-  symlinkSync(shared, join(linked, 'node_modules'), 'dir');
+  linkFolder(shared, join(linked, 'node_modules'));
   write(join(nested, 'package-lock.json'), '{}');
   write(join(nested, 'node_modules', 'patched-lib', '.git', 'HEAD'));
 

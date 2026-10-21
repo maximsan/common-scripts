@@ -7,7 +7,9 @@ import { existsSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { SafetyError } from './devkit-core.mjs';
 import { main } from './nmclean.mjs';
-import { makeRepo, runScript, scriptPath, testContext, tempWorkspace, write } from './test-helpers.mjs';
+import {
+  FILE_LINK_SKIP, makeRepo, runScript, scriptPath, testContext, tempWorkspace, write,
+} from './test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('nmclean');
 const stateDir = join(workspace, 'state');
@@ -66,7 +68,7 @@ test('as a process: refuses --apply without a terminal, deletes with --apply --y
   assert.equal(existsSync(join(app, 'node_modules')), false);
 });
 
-test('runs when started through a symlink (e.g. an alias in ~/bin)', () => {
+test('runs when started through a symlink (e.g. an alias in ~/bin)', { skip: FILE_LINK_SKIP }, () => {
   const root = join(workspace, 'via-link');
 
   makeRepo(root, 'app');

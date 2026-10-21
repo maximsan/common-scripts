@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { findTokenLines, main, maskToken, parseCommandLine, planEdit } from './npmrctoken.mjs';
-import { makeRepo, runScript, tempWorkspace, testContext, write } from './test-helpers.mjs';
+import { FILE_LINK_SKIP, makeRepo, runScript, tempWorkspace, testContext, write } from './test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('npmrctoken');
 const stateDir = join(workspace, 'state');
@@ -62,7 +62,6 @@ test('dry run lists every file, --apply updates them, and the full token never a
   const app = makeRepo(root, 'app');
   const lib = makeRepo(root, 'lib');
   const tools = makeRepo(root, 'tools');
-  const shared = join(workspace, 'user-npmrc');
   const tokenLine = `//npm.example.com/:_authToken=${OLD_TOKEN}\n`;
 
   write(join(app, '.npmrc'), tokenLine);
@@ -70,8 +69,6 @@ test('dry run lists every file, --apply updates them, and the full token never a
   write(join(lib, 'packages', 'ui', '.npmrc'), tokenLine);
   write(join(lib, 'docs', '.npmrc'), tokenLine); // not a package folder: ignored
   write(join(tools, '.npmrc'), `${tokenLine}//npm.other.com/:_authToken=${OLD_TOKEN}\n`);
-  write(shared, tokenLine);
-  symlinkSync(shared, join(lib, '.npmrc'));
 
   const dryRun = testContext({ cwd: root, stateDir });
 
@@ -81,7 +78,6 @@ test('dry run lists every file, --apply updates them, and the full token never a
 
   assert.match(planned, /do {4}app\/\.npmrc .*npm_\*{12}1111 {2}-> {2}npm_\*{12}2222/);
   assert.match(planned, /do {4}lib\/packages\/ui\/\.npmrc/);
-  assert.match(planned, /keep {2}lib\/\.npmrc .*symlink/);
   assert.match(planned, /keep {2}tools\/\.npmrc .*WARNING: 2 _authToken lines/);
   assert.match(planned, /1 warning\(s\)/);
   assert.doesNotMatch(planned, /docs/);
@@ -96,7 +92,6 @@ test('dry run lists every file, --apply updates them, and the full token never a
   assert.equal(readFileSync(join(app, '.npmrc'), 'utf8'), newLine);
   assert.equal(readFileSync(join(lib, 'packages', 'ui', '.npmrc'), 'utf8'), newLine);
   assert.equal(readFileSync(join(lib, 'docs', '.npmrc'), 'utf8'), tokenLine);
-  assert.equal(readFileSync(shared, 'utf8'), tokenLine);
   assert.match(readFileSync(join(tools, '.npmrc'), 'utf8'), new RegExp(OLD_TOKEN));
 
   const logsDir = join(stateDir, 'logs');
@@ -105,6 +100,24 @@ test('dry run lists every file, --apply updates them, and the full token never a
   for (const output of [planned, applied.output(), logs]) {
     assert.doesNotMatch(output, new RegExp(`${OLD_TOKEN}|${NEW_TOKEN}`));
   }
+});
+
+test('a .npmrc that is a link is left alone, so a user-wide file is never changed', {
+  skip: FILE_LINK_SKIP,
+}, async () => {
+  const root = join(workspace, 'linked');
+  const lib = makeRepo(root, 'lib');
+  const shared = join(workspace, 'user-npmrc');
+  const tokenLine = `//npm.example.com/:_authToken=${OLD_TOKEN}\n`;
+
+  write(shared, tokenLine);
+  symlinkSync(shared, join(lib, '.npmrc'));
+
+  const applied = testContext({ cwd: root, stateDir });
+
+  assert.equal(await main([NEW_TOKEN, '--apply'], applied.context), 0, applied.output());
+  assert.match(applied.output(), /keep {2}lib\/\.npmrc .*symlink/);
+  assert.equal(readFileSync(shared, 'utf8'), tokenLine);
 });
 
 test('as a process: prints the masked plan, and refuses --apply without a terminal', () => {

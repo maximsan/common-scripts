@@ -21,37 +21,33 @@ const GIT_ENV_PREFIX = 'GIT_';
  * Real runs always use HOST_RULES, the rules of the machine they run on. Functions that touch no disk also
  * take a `rules` argument, so tests can check another system's entry: the Windows rules are tested on
  * macOS and Linux this way, where the tests run.
- *
- * Fields:
- * - name: the process.platform name, shown in messages;
- * - paths: the path syntax (drive letters and backslashes, or plain slashes);
- * - ignoreCase: paths that differ only in letter case name the same folder;
- * - networkPrefixes: starts of a network path, where the scripts refuse to run;
- * - protectedEnvVars: environment variables naming folders the scripts must never run inside;
- * - protectedSystemFolders: absolute folders the scripts must never run inside;
- * - protectedHomeFolders: folders inside the home folder the scripts must never run inside;
- * - tempHomes: where the user temp folder may be (devclean deletes old entries there); subfolders count;
- * - onlyAbsolutePath: child processes get a PATH with only absolute folders, so an empty entry or "."
- *   can't make them run an npm or yarn planted in the current folder;
- * - treeKill: how to end a child and everything it started: taskkill, or a ps listing plus kill;
- * - fileOwners: files have an owning user id, so a shared temp folder can hold other users' entries;
- * - readOnlyBlocksDelete: a read-only file can't be deleted until the attribute is cleared. Elsewhere the
- *   parent folder's permissions decide, and changing the file's mode would only widen access to every
- *   hard link of it.
- * @typedef {{
- *   name: string,
- *   paths: import('node:path').PlatformPath,
- *   ignoreCase: boolean,
- *   networkPrefixes: string[],
- *   protectedEnvVars: string[],
- *   protectedSystemFolders: string[],
- *   protectedHomeFolders: string[],
- *   tempHomes: (home: string) => string[],
- *   onlyAbsolutePath: boolean,
- *   treeKill: 'taskkill' | 'ps',
- *   fileOwners: boolean,
- *   readOnlyBlocksDelete: boolean,
- * }} PlatformRules
+ * @typedef {object} PlatformRules
+ * @property {string} name
+ *   The process.platform name, shown in messages.
+ * @property {import('node:path').PlatformPath} paths
+ *   The path syntax: drive letters and backslashes, or plain slashes.
+ * @property {boolean} ignoreCase
+ *   Paths that differ only in letter case name the same folder.
+ * @property {string[]} networkPrefixes
+ *   Starts of a network path. The scripts refuse to run on a network path.
+ * @property {string[]} protectedEnvVars
+ *   Environment variables naming folders the scripts must never run inside.
+ * @property {string[]} protectedSystemFolders
+ *   Absolute folders the scripts must never run inside.
+ * @property {string[]} protectedHomeFolders
+ *   Folders inside the home folder the scripts must never run inside.
+ * @property {(home: string) => string[]} tempHomes
+ *   Where the user temp folder may be; subfolders count. devclean deletes old temp entries there.
+ * @property {boolean} onlyAbsolutePath
+ *   Child processes get a PATH with only absolute folders, so an empty entry or "." can't make them run
+ *   an npm or yarn planted in the current folder.
+ * @property {'taskkill' | 'ps'} treeKill
+ *   How to end a child and everything it started: taskkill, or a ps listing plus kill.
+ * @property {boolean} fileOwners
+ *   Files have an owning user id, so a shared temp folder can hold other users' entries.
+ * @property {boolean} readOnlyBlocksDelete
+ *   A read-only file can't be deleted until the attribute is cleared. Elsewhere the parent folder's
+ *   permissions decide, and changing the file's mode would only widen access to every hard link of it.
  */
 
 /** @type {Omit<PlatformRules, 'name' | 'tempHomes'>} */

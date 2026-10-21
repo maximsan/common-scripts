@@ -10,9 +10,11 @@ import { SafetyError, errorCode } from './errors.mjs';
 
 /**
  * Where a script run takes its surroundings from (see "run context" in GLOSSARY.md). runMain builds it
- * from the process; tests pass their own.
+ * from the process; tests pass their own. `env` holds the environment variables that name protected
+ * folders, such as LOCALAPPDATA on Windows.
  * @typedef {{
  *   cwd: string,
+ *   env: NodeJS.ProcessEnv,
  *   stateDir: string,
  *   tempDir: string,
  *   print: (line?: string) => void,
@@ -168,6 +170,7 @@ export function processContext() {
 
   return {
     cwd: process.cwd(),
+    env: process.env,
     stateDir: path.join(stateParent, STATE_FOLDER),
     tempDir: tmpdir(),
     print: (line = '') => {

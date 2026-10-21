@@ -207,8 +207,12 @@ const ownedByMe = (info) => !HOST_RULES.fileOwners || info.uid === process.getui
 const changedSince = (mtimeMs, cutoffMs) => (mtimeMs >= cutoffMs ? 'changed recently' : null);
 
 /**
- * Why a temp folder must be kept: it holds a nested repo or a special file (a program may still use it,
- * whatever its age), or something in it changed recently.
+ * Why a temp folder must be kept, or null when it may be deleted.
+ * - A nested repo: deleting it fails on its .git folder and leaves a leftover that fails on every run.
+ * - A special file, such as a socket: a running program talks through it. Its date does not change while it
+ *   is used, so an old date does not mean the folder is unused. Example: a browser's SingletonSocket, or
+ *   ssh-agent's socket on Linux.
+ * - Otherwise: something in it changed recently.
  * @param {TreeInfo} tree  what measure found in the folder
  * @param {number} cutoffMs  changes at or after this time keep it
  * @returns {string | null} why it is kept, or null when it may be deleted

@@ -10,7 +10,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { findRepos, parseArgs, pullAll } from './gpall.mjs';
-import { git, scriptPath, tempWorkspace } from './test-helpers.mjs';
+import { FILE_LINK_SKIP, git, scriptPath, tempWorkspace } from './test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('gpall');
 const root = join(workspace, 'repos'); // the folder the script runs in (contains the clones)
@@ -41,8 +41,9 @@ before(() => {
   commitFile(seed, 'a.txt', 'v1\n', 'c1');
   git(seed, 'push', '-q', 'origin', 'main');
 
+  // Git for Windows checks files out with CRLF line endings by default; the clones keep the committed ones.
   for (const name of ['clean', 'diverged', 'dirty-conflict', 'broken-remote']) {
-    execFileSync('git', ['clone', '-q', remote, join(root, name)]);
+    execFileSync('git', ['clone', '-q', '-c', 'core.autocrlf=false', remote, join(root, name)]);
   }
 
   git(join(root, 'broken-remote'), 'remote', 'set-url', 'origin', join(workspace, 'does-not-exist.git'));
@@ -104,7 +105,7 @@ test('parseArgs: optional job count or --help; anything else is refused', () => 
   }
 });
 
-test('runs when started through a symlink (e.g. an alias in ~/bin)', () => {
+test('runs when started through a symlink (e.g. an alias in ~/bin)', { skip: FILE_LINK_SKIP }, () => {
   const link = join(workspace, 'gpall-link.mjs');
 
   symlinkSync(scriptPath('gpall.mjs'), link);

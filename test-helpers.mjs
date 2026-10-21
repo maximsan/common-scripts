@@ -2,7 +2,7 @@
 // test-helpers.mjs - fixtures shared by the devkit tests: real git repos and files in a temp folder.
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -82,6 +82,40 @@ export function tempWorkspace(prefix) {
 }
 
 /**
+ * Link a folder: a junction on Windows, where it needs no extra rights, and a symlink elsewhere, where Node
+ * ignores the type. On Windows the tests then cover the junctions that npm and pnpm create.
+ * @param {string} target  absolute path of the folder to link to
+ * @param {string} link  path of the new link
+ */
+export const linkFolder = (target, link) => {
+  symlinkSync(target, link, 'junction');
+};
+
+/**
+ * Why tests that need a file symlink are skipped, or false when this machine allows one. Windows allows
+ * file symlinks only with Developer Mode or administrator rights.
+ * @type {string | false}
+ */
+export const FILE_LINK_SKIP = (() => {
+  const dir = mkdtempSync(join(tmpdir(), 'devkit-link-probe-'));
+
+  try {
+    writeFileSync(join(dir, 'file'), '');
+    symlinkSync(join(dir, 'file'), join(dir, 'link'));
+
+    return false;
+  } catch (err) {
+    if (/** @type {NodeJS.ErrnoException} */ (err).code !== 'EPERM') {
+      throw err;
+    }
+
+    return 'file symlinks need Developer Mode or administrator rights on this machine';
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+})();
+
+/**
  * Absolute path of a script next to this file.
  * @param {string} script  file name, e.g. "nmclean.mjs"
  * @returns {string} the absolute path
@@ -106,7 +140,8 @@ export function runScript(script, args, { cwd, stateDir, env = {} }) {
 
 /**
  * A run context for calling a script's main in-process: printed lines are collected, and every
- * confirmation gets the same answer.
+ * confirmation gets the same answer. LOCALAPPDATA points at `stateDir`, as in runScript: on Windows the
+ * test folders sit in the system temp folder inside the real LOCALAPPDATA, where the scripts refuse to run.
  * @param {{ cwd: string, stateDir: string, tempDir?: string, answer?: boolean }} options
  *   the folder to run in, where state goes, the temp folder, and the answer to "continue?"
  * @returns {{ context: import('./devkit-core.mjs').RunContext, output: () => string }}
@@ -117,6 +152,7 @@ export function testContext({ cwd, stateDir, tempDir = tmpdir(), answer = true }
   const lines = [];
   const context = {
     cwd,
+    env: { ...process.env, LOCALAPPDATA: stateDir },
     stateDir,
     tempDir,
     print: (line = '') => {

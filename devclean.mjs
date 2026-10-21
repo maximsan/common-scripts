@@ -366,7 +366,7 @@ export async function main(argv, context) {
     return EXIT_OK;
   }
 
-  const root = await assertSafeRoot(context.cwd);
+  const root = await assertSafeRoot(context.cwd, { env: context.env });
   const repos = await findRepos(root);
   const now = Date.now();
 

@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { DAY_MS, NODE_MODULES } from './constants.mjs';
 import { HOST_RULES } from './platform.mjs';
 import { checkRepoFolder, checkTempEntry, removeRepoFolder, removeTempEntry, safeRemoveTree } from './deletion.mjs';
-import { backdate, git, makeRepo, tempWorkspace, write } from '../test-helpers.mjs';
+import { backdate, FILE_LINK_SKIP, git, linkFolder, makeRepo, tempWorkspace, write } from '../test-helpers.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('core-deletion');
 const ON_WINDOWS = HOST_RULES.name === 'win32';
@@ -31,8 +31,12 @@ test('safeRemoveTree removes links but never their targets', async () => {
   write(join(outside, 'precious.txt'), 'keep me');
   write(join(target, 'pkg', 'index.js'));
   write(join(target, 'pkg', 'deep', 'a', 'b', 'c.js'));
-  symlinkSync(outside, join(target, 'linked-dir'), 'dir'); // like a workspace junction
-  symlinkSync(join(outside, 'precious.txt'), join(target, 'linked-file'));
+  linkFolder(outside, join(target, 'linked-dir')); // like a workspace junction
+
+  if (!FILE_LINK_SKIP) {
+    symlinkSync(join(outside, 'precious.txt'), join(target, 'linked-file'));
+  }
+
   assert.deepEqual(await safeRemoveTree(target, boundary), { ok: true, output: '' });
   assert.equal(existsSync(target), false);
   assert.equal(existsSync(join(outside, 'precious.txt')), true);
@@ -44,7 +48,7 @@ test('safeRemoveTree refuses a target that is itself a link, or outside the boun
 
   write(join(real, 'file.js'));
   mkdirSync(boundary, { recursive: true });
-  symlinkSync(real, join(boundary, NODE_MODULES), 'dir');
+  linkFolder(real, join(boundary, NODE_MODULES));
   assert.match((await safeRemoveTree(join(boundary, NODE_MODULES), boundary)).output, /symlink/);
   assert.match((await safeRemoveTree(real, boundary)).output, /outside/);
   assert.equal(existsSync(join(real, 'file.js')), true);
@@ -81,7 +85,7 @@ test('checkRepoFolder applies every repo-folder rule', async () => {
 
   write(join(repo, 'ok', 'a.js'));
   write(join(outside, 'precious.txt'));
-  symlinkSync(outside, join(repo, 'linked'), 'dir');
+  linkFolder(outside, join(repo, 'linked'));
   write(join(repo, 'not-ignored', 'a.js'));
   write(join(repo, 'nested', 'patched-lib', '.git', 'HEAD'));
   write(join(repo, 'a'));
@@ -181,7 +185,7 @@ test('checkTempEntry applies every temp-entry rule', async () => {
   backdate(join(temp, 'mixed', 'old.txt'), 20);
   write(join(temp, 'mixed', 'new.txt'));
   write(join(outside, 'precious.txt'));
-  symlinkSync(outside, join(temp, 'linked'), 'dir');
+  linkFolder(outside, join(temp, 'linked'));
   write(join(temp, 'old-clone', '.git', 'HEAD'));
   backdate(join(temp, 'old-clone', '.git', 'HEAD'), 20);
   backdate(join(temp, 'old-clone', '.git'), 20);
@@ -259,7 +263,7 @@ test('removeTempEntry checks again and keeps an entry that changed after plannin
   write(join(temp, 'touched.log'));
   write(join(temp, 'touched-dir', 'new.txt'));
   rmSync(join(temp, 'swapped.log'));
-  symlinkSync(outside, join(temp, 'swapped.log'), 'dir');
+  linkFolder(outside, join(temp, 'swapped.log'));
 
   assert.match((await removeTempEntry(temp, join(temp, 'touched.log'), cutoff)).output, /changed recently.*kept/);
   assert.match((await removeTempEntry(temp, join(temp, 'touched-dir'), cutoff)).output, /changed recently.*kept/);
