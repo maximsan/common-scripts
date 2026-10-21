@@ -45,6 +45,16 @@ test('a long list shows a window around the highlighted item, cut to the termina
   assert.ok(lines.every((line) => line.length < 40));
 });
 
+test('a selected mark is green where the terminal shows colors, and only there', () => {
+  const state = { ...START, selected: new Set([1]) };
+  const terminal = { rows: 24, columns: 80, colored: true };
+  const [, , unselected, selected] = renderList(state, 'Pick:', ['app', 'lib'], terminal);
+
+  assert.equal(unselected, '> [ ] app');
+  assert.equal(selected, '  \u001B[32m[x]\u001B[0m lib');
+  assert.equal(renderList(state, 'Pick:', ['app', 'lib'], { rows: 24, columns: 80 })[3], '  [x] lib');
+});
+
 test('typed numbers: lists and ranges, an empty line picks none, anything else is invalid', () => {
   assert.deepEqual(parseNumbers('1, 3 5-7', 8), [0, 2, 4, 5, 6]);
   assert.deepEqual(parseNumbers('2,2,1-2', 3), [0, 1]);
