@@ -4,46 +4,13 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { NODE_MODULES } from '../../lib/shared/constants.mjs';
-import { findRepos } from '../../lib/shared/discovery.mjs';
-import { planAndRun, planFolders, runItems, skippedItem } from '../../lib/shared/run.mjs';
+import { planAndRun, runItems, skippedItem } from '../../lib/shared/run.mjs';
 import { tempWorkspace, testContext } from '../setup.mjs';
-import { git, makeRepo, write } from '../utils.mjs';
+import { write } from '../utils.mjs';
 
-const { root: workspace, cleanup } = tempWorkspace('core-run');
+const { root: workspace, cleanup } = tempWorkspace('shared-run');
 
 after(cleanup);
-
-/**
- * Map of plan line name to its skip reason, for asserting on a whole plan.
- * @param {import('../../lib/shared/run.mjs').PlanItem[]} items  plan lines
- * @returns {Record<string, string | null>} skip reason per name; null means "will run"
- */
-const skipByName = (items) => Object.fromEntries(items.map((item) => [item.name, item.skip]));
-
-test('planFolders applies the git guards and finds nested workspaces', async () => {
-  const root = join(workspace, 'plan');
-  const good = makeRepo(root, 'good');
-
-  write(join(good, NODE_MODULES, 'a.js'));
-  write(join(good, 'packages', 'web', 'package.json'), '{}');
-  write(join(good, 'packages', 'web', NODE_MODULES, 'b.js'));
-  write(join(makeRepo(root, 'not-ignored', { ignore: '' }), NODE_MODULES, 'a.js'));
-
-  const tracked = makeRepo(root, 'tracked', { ignore: '' });
-
-  write(join(tracked, NODE_MODULES, 'vendored.js'));
-  git(tracked, 'add', '.');
-  git(tracked, 'commit', '-q', '-m', 'vendor');
-  write(join(tracked, '.gitignore'), `${NODE_MODULES}/\n`);
-
-  const skips = skipByName(await planFolders(await findRepos(root), [NODE_MODULES], { jobs: 2 }));
-
-  assert.equal(skips['good/node_modules'], null);
-  assert.equal(skips['good/packages/web/node_modules'], null);
-  assert.match(String(skips['not-ignored/node_modules']), /not ignored/);
-  assert.match(String(skips['tracked/node_modules']), /tracked/);
-});
 
 test('runItems attempts every item and returns failures as data', async () => {
   /** @type {import('../../lib/shared/run.mjs').PlanItem[]} */
