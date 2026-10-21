@@ -30,14 +30,24 @@ test('processTree lists a process and all its descendants, parents first', () =>
   assert.deepEqual(processTree(99, psOutput), [99]);
 });
 
-test('a timed-out command is killed together with the processes it started', {
-  skip: ON_WINDOWS && 'uses sh syntax; taskkill is covered by the Windows check',
-}, async () => {
-  const result = await runShell('sleep 30 & echo $!; wait', { timeout: 500 });
+test('a timed-out command is killed together with the processes it started', async () => {
+  // A Node script works in cmd.exe and sh alike, so this checks taskkill on Windows and ps elsewhere.
+  const script = join(workspace, 'starts-child.cjs');
+
+  write(script, [
+    'const { spawn } = require("node:child_process");',
+    'const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], { stdio: "ignore" });',
+    'console.log(child.pid);',
+    'setTimeout(() => {}, 30000);',
+  ].join('\n'));
+
+  const result = await runShell(`"${process.execPath}" "${script}"`, { timeout: 3000 });
 
   assert.equal(result.timedOut, true);
 
   const grandchild = Number(result.stdout.trim());
+
+  assert.ok(grandchild > 0, `no process id printed: ${result.output}`);
 
   /**
    * True while the grandchild process still exists.
