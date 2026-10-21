@@ -14,7 +14,7 @@ after(cleanup);
 test('planAndRun attempts every item, returns exit code 1 on a failure, and refuses while locked', async () => {
   const stateDir = join(workspace, 'state');
   const { context } = testContext({ cwd: workspace, stateDir });
-  const options = { apply: true, yes: false, help: false, jobs: 2 };
+  const options = { apply: true, yes: false, dryRun: false, help: false, jobs: 2 };
 
   /** @type {import('../../lib/shared/run.mjs').PlanItem[]} */
   const items = [
@@ -69,7 +69,7 @@ test('with --apply, only the picked groups run; nothing picked changes nothing; 
     },
   });
   const sections = [{ title: 'test', items: [item('a/1', 'a'), item('a/2', 'a'), item('b/1', 'b')] }];
-  const options = { apply: true, yes: false, help: false, jobs: 1 };
+  const options = { apply: true, yes: false, dryRun: false, help: false, jobs: 1 };
 
   /**
    * Run the plan with these picks.
@@ -101,12 +101,13 @@ test('with --apply, only the picked groups run; nothing picked changes nothing; 
   assert.doesNotMatch(all.output(), /item\(s\)$/m);
 });
 
-test('a dry run ends with the full command to apply it', async () => {
+test('a dry run ends with the commands that act on it', async () => {
   const { context, output } = testContext({ cwd: workspace, stateDir: join(workspace, 'hint-state') });
   const items = [{ name: 'one', skip: null, run: async () => ({ ok: true, output: '' }) }];
   const sections = [{ title: 'test', items }];
-  const options = { apply: false, yes: false, help: false, jobs: 1 };
+  const options = { apply: false, yes: false, dryRun: false, help: false, jobs: 1 };
 
   await planAndRun({ sections, options, verb: 'run', command: 'devclean', args: ['--days', '60'], context });
-  assert.match(output(), /^ {2}devkit devclean --days 60 --apply$/m);
+  assert.match(output(), /^ {2}devkit devclean --days 60 {16}pick and confirm, in a terminal$/m);
+  assert.match(output(), /^ {2}devkit devclean --days 60 --apply --yes {2}everything, without questions$/m);
 });

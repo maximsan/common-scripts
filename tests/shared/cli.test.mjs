@@ -7,11 +7,13 @@ import { SafetyError } from '../../lib/shared/errors.mjs';
 
 test('parseArgs: bare number is jobs; unknown flags, prototype names and bad values are refused', () => {
   const spec = { defaults: { days: 30 }, numbers: { '--days': /** @type {'days'} */ ('days') } };
-  const expected = { apply: true, yes: false, help: false, jobs: 8, days: 5 };
+  const expected = { apply: true, yes: false, dryRun: false, help: false, jobs: 8, days: 5 };
 
   assert.deepEqual(parseArgs(['8', '--days', '5', '--apply'], spec), expected);
 
-  for (const bad of [['--aply'], ['constructor'], ['--days', '0'], ['0']]) {
+  const bads = [['--aply'], ['constructor'], ['--days', '0'], ['0'], ['--dry-run', '--apply'], ['--dry-run', '--yes']];
+
+  for (const bad of bads) {
     assert.throws(() => parseArgs(bad, spec), SafetyError);
   }
 });

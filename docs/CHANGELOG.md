@@ -4,6 +4,14 @@ What changed in each version of the package that `npm pack` builds. The newest v
 
 ## Unreleased
 
+### Changed
+
+- In a terminal, `nmclean`, `install`, `devclean` and `token` no longer stop after the plan: they show the pick list and ask for "yes" right away, so `--apply` is no longer needed there. Esc or any answer other than "yes" changes nothing. Without a terminal they still only print the plan. See [decision 3](adr/0003-confirm-no-schedule.md).
+
+### Added
+
+- `--dry-run` only prints the plan, also in a terminal.
+
 ### Fixed
 
 - Esc at the "Type yes to continue" question cancels, as it does in the pick list. The question says so.

@@ -5,14 +5,14 @@ Node.js scripts for the folder that holds your git repos. They run on Windows (b
 | Command | What it does | Default |
 |---|---|---|
 | `pull` (alias `gpall`) | `git pull --ff-only --prune` in every repo, in parallel | runs immediately (a refused pull changes nothing) |
-| `nmclean` | deletes `node_modules` in every repo, including workspace packages | dry run |
-| `install` (alias `nminstall`) | lockfile-exact install: `npm ci`, `yarn install --frozen-lockfile` (Yarn 1) or `yarn install --immutable` (Yarn 2+) | dry run, one repo at a time |
-| `devclean` | periodic cleanup: stale `node_modules`, old build outputs, old temp-folder entries, npm/Yarn 1 caches; review-only report of agent files | dry run |
-| `token` (alias `npmrctoken`) | puts a new registry token into the `_authToken=` line of every `.npmrc`, in repos and their package folders | dry run |
+| `nmclean` | deletes `node_modules` in every repo, including workspace packages | plan, pick, confirm |
+| `install` (alias `nminstall`) | lockfile-exact install: `npm ci`, `yarn install --frozen-lockfile` (Yarn 1) or `yarn install --immutable` (Yarn 2+) | plan, pick, confirm; one repo at a time |
+| `devclean` | periodic cleanup: stale `node_modules`, old build outputs, old temp-folder entries, npm/Yarn 1 caches; review-only report of agent files | plan, pick, confirm |
+| `token` (alias `npmrctoken`) | puts a new registry token into the `_authToken=` line of every `.npmrc`, in repos and their package folders | plan, pick, confirm |
 
 The folder holds:
 
-- `index.mjs`: the one entry point. It starts a command by name: `node index.mjs nmclean --apply`.
+- `index.mjs`: the one entry point. It starts a command by name: `node index.mjs nmclean`.
 - `lib/`: all code.
   - `lib/commands/`: one file per command; `devclean` has a folder with one file per section. `lib/commands/index.mjs` lists the commands; a new command is one new file plus one line there.
   - `lib/shared/`: the shared code, one file per area. It holds the safety checks and the plan → confirm → run flow of `nmclean`, `install`, `devclean` and `token`, which import it only through `lib/shared/index.mjs`. `pull` (`gpall.mjs`) is standalone: it deletes nothing, so it needs none of those checks. It imports only the status line, `lib/shared/progress.mjs`.
@@ -58,15 +58,27 @@ To update, raise `version` in `package.json` and add the changes to [docs/CHANGE
 
 While you work on the scripts, run `npm link` once in this repo instead. `devkit` then runs the code in the repo directly, so every change takes effect without a new package.
 
-Run the commands from your repos folder, for example `devkit nmclean`. Each command has `--help`. `nmclean`, `install`, `devclean` and `token` only print a plan (a dry run), ending with the command that applies it. With `--apply`, they first show a list to pick from: `node_modules` folders for `nmclean`, repos for `install`, `.npmrc` files for `token`, sections for `devclean`. Move with the arrow keys and select with Space; Enter with nothing selected takes the line under the cursor; where the terminal does not accept single keypresses, you type the numbers instead, e.g. `1,3,5-7`. `--yes` skips the list and the confirmation and takes everything. To narrow the plan without the list, `nmclean --only` takes repo names or folder paths as the plan shows them (`devkit nmclean --only ue-shared,ue-wof/node_modules`), and `devclean --only` takes section names. If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--yes` after reviewing the dry run.
+Run the commands from your repos folder, for example `devkit nmclean`. Each command has `--help`. In a terminal, `nmclean`, `install`, `devclean` and `token` print the plan, then show a list to pick from, then ask you to type "yes":
+
+- the list holds `node_modules` folders for `nmclean`, repos for `install`, `.npmrc` files for `token`, and sections for `devclean`;
+- move with the arrow keys and select with Space; Enter with nothing selected takes the line under the cursor; Esc cancels;
+- where the terminal does not accept single keypresses, you type the numbers instead, e.g. `1,3,5-7`.
+
+Other ways to run them:
+
+- `--dry-run` only prints the plan. Without a terminal, for example when the output goes to a file, the commands only print the plan too.
+- `--apply --yes` takes everything, without the list and without the "yes". It is the only way to act where no person can answer.
+- `nmclean --only` narrows the plan to repo names or folder paths as the plan shows them (`devkit nmclean --only ue-shared,ue-wof/node_modules`); `devclean --only` takes section names.
+
+If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--apply --yes` after reviewing the plan.
 
 ### Updating the registry token
 
 `token` takes the new token as its first argument. Tokens are always shown masked, as in the example below.
 
 ```bash
-devkit token npm_NewToken1234XyZ9            # dry run: lists every .npmrc and what would change
-devkit token npm_NewToken1234XyZ9 --apply    # writes the files after you type "yes"
+devkit token npm_NewToken1234XyZ9 --dry-run   # lists every .npmrc and what would change
+devkit token npm_NewToken1234XyZ9             # the same list, then pick files and type "yes" to write them
 ```
 
 ```
@@ -80,15 +92,15 @@ The token you type is saved in your shell history. Clear that line from the hist
 
 ## Workflow
 
-There is no scheduled task ([decision 3](docs/adr/0003-dry-run-no-schedule.md)). Instead, `--due` reminds you when you open a terminal, and you run the cleanup yourself.
+There is no scheduled task ([decision 3](docs/adr/0003-confirm-no-schedule.md)). Instead, `--due` reminds you when you open a terminal, and you run the cleanup yourself.
 
 ```mermaid
 flowchart LR
   A[Open terminal] --> B{devclean --due}
   B -- not due --> Z[Nothing printed]
-  B -- due --> C[devclean: dry run]
+  B -- due --> C[devclean]
   C --> D[Review plan and agent-files report]
-  D --> E[devclean --apply]
+  D --> E[Pick sections]
   E --> F[Typed yes]
   F --> G[Lock, run items in a pool, re-check each before deleting]
   G --> H[ok/FAIL per item, failures listed, log written, last-cleanup date saved]

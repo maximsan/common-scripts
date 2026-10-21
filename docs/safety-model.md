@@ -25,7 +25,7 @@ A folder is deleted only if all of these hold. Such a folder is a [repo folder](
 
 The search never enters dot-folders (`.venv`, `.yarn`, …), `node_modules` or nested repos.
 
-Before `install` installs a repo, it checks the `node_modules` folder at the repo root. It uses the same rules as for a [repo folder](GLOSSARY.md), because [`npm ci`](https://docs.npmjs.com/cli/v11/commands/npm-ci) deletes this folder and Yarn changes it. If the folder does not pass a check, the dry run shows it as kept, and `install` does not install the repo.
+Before `install` installs a repo, it checks the `node_modules` folder at the repo root. It uses the same rules as for a [repo folder](GLOSSARY.md), because [`npm ci`](https://docs.npmjs.com/cli/v11/commands/npm-ci) deletes this folder and Yarn changes it. If the folder does not pass a check, the plan shows it as kept, and `install` does not install the repo.
 
 `install` does not check the `node_modules` folders of workspace packages. A workspace package is a package in a subfolder of the repo, with its own `package.json`. `npm ci` also deletes the contents of these folders.
 
@@ -70,7 +70,7 @@ This applies to `token` only.
 
 ## Process
 
-An `--apply` run holds one lock shared by these scripts, so two of them never change files at the same time. A live run keeps refreshing the lock. Every action is logged to `%LOCALAPPDATA%\devkit\logs` on Windows and `~/.local/state/devkit/logs` elsewhere.
+A run that changes files holds one lock shared by these scripts, so two of them never change files at the same time. A live run keeps refreshing the lock. Every action is logged to `%LOCALAPPDATA%\devkit\logs` on Windows and `~/.local/state/devkit/logs` elsewhere.
 
 ## Child processes
 

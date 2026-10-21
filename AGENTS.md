@@ -12,7 +12,7 @@ npm run check                                  # lint, then type check, then all
 npm run format                                 # auto-fix lint findings
 node --test tests/shared/run.test.mjs          # one test file; needs no install
 node --test --test-name-pattern="planAndRun" tests/shared/run.test.mjs   # one test by name
-node index.mjs nmclean                         # run a command from a repos folder (dry run)
+node index.mjs nmclean --dry-run               # run a command from a repos folder, plan only
 ```
 
 The scripts themselves run on Node 18 and need no install. The Linux test run in Docker is in the README, under Checks.
@@ -25,7 +25,7 @@ The scripts themselves run on Node 18 and need no install. The Linux test run in
   1. `parseArgs`;
   2. `findReposHere`, which refuses an unsafe current folder before it finds repos;
   3. build plan sections, whose items are `{ name, skip, run }`;
-  4. `planAndRun`, which with `--apply` first lets the person pick groups of items (`PlanItem.group`), prints the plan, stops there without `--apply`, asks for confirmation, takes the lock, runs the items in a pool and writes the log.
+  4. `planAndRun`, which prints the plan, stops there when the run only looks ([decision 3](docs/adr/0003-confirm-no-schedule.md)), lets the person pick groups of items (`PlanItem.group`), asks for confirmation, takes the lock, runs the items in a pool and writes the log.
 - **Check and remove come in pairs.** The plan calls the check (`checkRepoFolder`, `checkTempEntry`). Each item's `run` calls the matching remove (`removeRepoFolder`, `removeTempEntry`), which runs the check again first. Every folder deletion ends in `safeRemoveTree` (`lib/shared/remove.mjs`): it renames the folder, validates it again, then deletes. Never delete through any other path.
 - **Operating-system differences live only in `PLATFORM_RULES`** (`lib/shared/platform.mjs`, [decision 5](docs/adr/0005-platform-rules-table.md)). How to add one is written above the `PlatformRules` type.
 - **Tests mirror `lib/`** in `tests/commands/` and `tests/shared/`. `tests/setup.mjs`:

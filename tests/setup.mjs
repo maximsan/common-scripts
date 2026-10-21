@@ -53,13 +53,14 @@ export function runCli(args, { cwd, stateDir, env = {}, entry = INDEX_PATH }) {
  * LOCALAPPDATA, where the scripts refuse to run.
  * @param {{
  *   cwd: string, stateDir: string, tempDir?: string, answer?: boolean, picks?: number[] | null,
+ *   interactive?: boolean,
  * }} options
- *   the folder to run in, where state goes, the temp folder, the answer to "continue?", and the picked
- *   indexes (null: every line)
+ *   the folder to run in, where state goes, the temp folder, the answer to "continue?", the picked
+ *   indexes (null: every line), and whether a person can answer, as in a terminal
  * @returns {{ context: import('../lib/shared/index.mjs').RunContext, output: () => string }}
  *   the context, and everything printed so far as one text
  */
-export function testContext({ cwd, stateDir, tempDir = tmpdir(), answer = true, picks = null }) {
+export function testContext({ cwd, stateDir, tempDir = tmpdir(), answer = true, picks = null, interactive = false }) {
   /** @type {string[]} */
   const lines = [];
   const context = {
@@ -83,6 +84,7 @@ export function testContext({ cwd, stateDir, tempDir = tmpdir(), answer = true, 
 
       return picks ?? [...labels.keys()];
     },
+    interactive,
     progress: { start: () => {}, advance: () => {}, stop: () => {}, print: () => {} },
   };
 

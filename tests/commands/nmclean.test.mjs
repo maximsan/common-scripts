@@ -99,6 +99,29 @@ test('--only takes repo names and folder paths; a name that matches nothing chan
   assert.equal(existsSync(join(web, 'node_modules')), true);
 });
 
+test('in a terminal, a plain run picks and confirms; --dry-run only looks', async () => {
+  const root = join(workspace, 'terminal');
+  const app = makeRepo(root, 'app');
+  const lib = makeRepo(root, 'lib');
+
+  write(join(app, 'node_modules', 'a.js'));
+  write(join(lib, 'node_modules', 'a.js'));
+
+  const looked = testContext({ cwd: root, stateDir, interactive: true });
+
+  assert.equal(await main(['--dry-run'], looked.context), 0);
+  assert.match(looked.output(), /Dry run: nothing changed/);
+  assert.doesNotMatch(looked.output(), /Pick what to delete/);
+  assert.equal(existsSync(join(app, 'node_modules')), true);
+
+  const picked = testContext({ cwd: root, stateDir, interactive: true, picks: [1] });
+
+  assert.equal(await main([], picked.context), 0, picked.output());
+  assert.match(picked.output(), /Pick what to delete/);
+  assert.equal(existsSync(join(app, 'node_modules')), true);
+  assert.equal(existsSync(join(lib, 'node_modules')), false);
+});
+
 test('as a process: refuses --apply without a terminal, deletes with --apply --yes', () => {
   const root = join(workspace, 'process');
   const app = makeRepo(root, 'app');
