@@ -16,6 +16,8 @@ The folder holds:
 - `lib/`: all code.
   - `lib/commands/`: one file per command; `devclean` has a folder with one file per section. `lib/commands/index.mjs` lists the commands; a new command is one new file plus one line there.
   - `lib/shared/`: the shared code, one file per area. It holds the safety checks and the plan → confirm → run flow of `nmclean`, `nminstall`, `devclean` and `npmrctoken`, which import it only through `lib/shared/index.mjs`. `gpall` is standalone: it deletes nothing, so it needs none of those checks.
+- `docs/`: the [glossary](docs/GLOSSARY.md), the [safety model](docs/safety-model.md) and the [decisions](docs/adr/).
+- `AGENTS.md`: working rules for coding agents; `CLAUDE.md` loads it.
 - `tests/`: the tests, in `tests/commands/` and `tests/shared/` like the code they test. `tests/setup.mjs` prepares a test run; `tests/utils.mjs` builds files, repos and links for tests.
 
 All the commands share these conventions:
@@ -76,80 +78,9 @@ flowchart LR
 
 ## Safety model
 
-These rules apply to `nmclean`, `nminstall`, `devclean` and `npmrctoken`. `gpall` only runs `git pull`.
+What the scripts refuse, check and keep is in [docs/safety-model.md](docs/safety-model.md). The decisions behind the design are in [docs/adr/](docs/adr/), one file per decision.
 
-**Where scripts refuse to run** (exit 2, nothing changed):
-
-- drive roots, the filesystem root and network (UNC) paths;
-- your home folder;
-- Windows: anything inside `SystemRoot`, `ProgramFiles`, `ProgramData`, `APPDATA` or `LOCALAPPDATA`;
-- macOS and Linux: anything inside the system folders (`/usr`, `/etc`, `/opt`, `/System`, `/Library` and the like) or inside `~/Library`, `~/.cache`, `~/.config` or `~/.local`.
-
-`/var` is not on the list, because macOS keeps each user's temp folder there.
-
-**What may be deleted in a repo.** A folder is deleted only if all of these hold. Such a folder is a [repo folder](GLOSSARY.md).
-
-- its name is exactly an allow-listed one (`node_modules`, `.next`, `.turbo`, `.parcel-cache`, `coverage`, `dist`, `build`);
-- it sits next to a `package.json`;
-- git ignores it (one exception, under *Before each deletion*);
-- it contains no tracked file (checked case-insensitively);
-- it contains no nested `.git`.
-
-The search never enters dot-folders (`.venv`, `.yarn`, …), `node_modules` or nested repos.
-
-Before `nminstall` installs a repo, it checks the `node_modules` folder at the repo root. It uses the same rules as for a [repo folder](GLOSSARY.md), because `npm ci` deletes this folder and Yarn changes it. If the folder does not pass a check, the dry run shows it as kept, and `nminstall` does not install the repo.
-
-`nminstall` does not check the `node_modules` folders of workspace packages. A workspace package is a package in a subfolder of the repo, with its own `package.json`. `npm ci` also deletes the contents of these folders.
-
-**Links.** Symlinks and junctions are removed as links. Their targets are never touched, and a folder reached through a link is never entered.
-
-**Before each deletion:**
-
-- every check runs again;
-- the folder is renamed first, so a folder whose rename is refused (on Windows, usually a file in use) is skipped whole;
-- a run interrupted after the rename leaves `<name>.devkit-deleting-<timestamp>` behind, which the next run finishes off.
-
-The next run deletes such a leftover without the git-ignore check, because `.gitignore` no longer matches the new name. Every other check still applies, including "no tracked file".
-
-On Windows, a read-only file is made writable first, because the attribute blocks deletion. macOS and Linux never change a file's permissions: there, the folder's permissions decide, and a changed mode would also reach every hard link of the file.
-
-macOS and Linux allow renaming and deleting files that are in use. There, a folder in use is deleted, and programs that still have its files open keep reading them until they close them.
-
-**Temp folder** (`devclean` only). It must be where the system normally keeps it, or a subfolder:
-
-- Windows: `%USERPROFILE%\AppData\Local\Temp`;
-- macOS: `/private/var/folders` (each user's own temp folder) or `/private/tmp`;
-- Linux: `/tmp` or `/var/tmp`.
-
-Only [temp entries](GLOSSARY.md) with nothing newer than the cutoff are deleted. Every rule is checked again right before each deletion. These temp entries are kept:
-
-- links;
-- entries that are neither a file nor a folder, such as sockets;
-- folders holding a socket or another special file anywhere inside, since a running program may still use them;
-- folders holding a nested git repo, as in repos;
-- on macOS and Linux, entries owned by another user, since `/tmp` is shared.
-
-**Token updates** (`npmrctoken` only):
-
-- only the text after `=` in the `_authToken=` line changes; every other byte of the file stays the same, including line endings;
-- a file with more than one `_authToken=` line is left unchanged with a warning, since each registry probably needs its own token;
-- an `.npmrc` that is a link is left alone, because it could point to your user-wide `~/.npmrc`;
-- `.npmrc` files committed to git are updated too, so check `git status` before you commit;
-- each file is read again right before writing, and read back afterwards to confirm the new token is there;
-- the full token never appears in the output or the log.
-
-**Process.** An `--apply` run holds one lock shared by these scripts, so two of them never change files at the same time. A live run keeps refreshing the lock. Every action is logged to `%LOCALAPPDATA%\devkit\logs` on Windows and `~/.local/state/devkit/logs` elsewhere.
-
-**Child processes:**
-
-- they get no stdin and no inherited `GIT_*` variables, and credential prompts are disabled;
-- git runs with fsmonitor disabled and no optional locks;
-- npm/yarn run with the current folder excluded from the program search (on macOS and Linux, `PATH` keeps only absolute folders);
-- on timeout, the command and every process it started are killed: with `taskkill` on Windows, and by listing them with `ps` elsewhere.
-
-**Agent files are never deleted.** `devclean` lists untracked files per repo (where agent scratch files show up) and the size of `~/.claude`. Claude Code deletes its own session data after `cleanupPeriodDays` (default 30). Use `claude project purge <path> --dry-run` for projects you no longer use.
-
-### One-time check on Windows
+## One-time check on Windows
 
 On Windows the tests create junctions; on macOS and Linux, which have no junctions, they use folder symlinks. The check below also deletes a junction made by Windows' own `mklink /J`. Run it once in PowerShell before relying on the scripts on Windows:
 
@@ -168,33 +99,6 @@ Test-Path "$t\work\app\node_modules"  # must be False
 ```
 
 If the first `Test-Path` prints `False`, stop using the scripts and report the output.
-
-## Decisions
-
-**1. Node.js scripts instead of PowerShell or bash.**
-*Context:* the scripts must work in Git Bash, PowerShell and cmd on Windows and in macOS and Linux shells, and handle junctions, long paths and child processes predictably.
-*Decision:* plain `.mjs` with JSDoc types checked by `// @ts-check`, using only built-in modules.
-*Consequences:* the scripts need nothing installed, and tests run with `node --test`. TypeScript's type checking works without a build step. Junction handling relies on Node's `lstat`, so it needs the one-time Windows check above.
-
-**2. Shared code plus small commands.**
-*Context:* several scripts need the same safety checks and run flow; copying them risks the copies drifting apart.
-*Decision:* the shared code owns every check and the plan/confirm/run flow; each script only plans its items. Commands reach it through one interface, `lib/shared/index.mjs`; the implementation is split by area in `lib/shared/`. `index.mjs` is the only file that is started: the `devkit` command that `npm link` installs points to it.
-*Consequences:* safety fixes land in one place, but the commands must be copied together with `index.mjs` and all of `lib/`.
-
-**3. Dry run plus confirmation instead of a scheduled task.**
-*Context:* unattended deletion is the main risk, and a Cloud PC may not be running at a scheduled time.
-*Decision:* dry run by default, then `--apply` and a typed `yes`; `--due` only reminds.
-*Consequences:* cleanup happens only when you look at it.
-
-**4. Lockfile-exact installs only.**
-*Context:* a bulk install must not change lockfiles or pick a package manager by guesswork.
-*Decision:* `npm ci` / `--frozen-lockfile` / `--immutable`; ambiguous repos are skipped with the reason.
-*Consequences:* repos without a lockfile need one manual install first.
-
-**5. One table for every difference between operating systems.**
-*Context:* Windows, macOS and Linux differ in path rules, protected folders, the temp folder, child processes and file ownership. Checks spread across the code were hard to find, and the Windows ones could only be tested on Windows.
-*Decision:* every difference is a field in `PLATFORM_RULES` in `lib/shared/platform.mjs`, with one entry per system (see [platform rules](GLOSSARY.md)). Code reads the rules and never the system itself; lint rejects `process.platform` everywhere else. How to add a system or a new difference is written above the table.
-*Consequences:* the Windows path rules are tested on macOS and Linux. A new difference between systems costs a field in every entry.
 
 ## Checks
 
@@ -231,9 +135,5 @@ The tests pass on macOS and on Linux. They have not been run on Windows. The Win
 
 ## Sources
 
-- [npm ci](https://docs.npmjs.com/cli/v11/commands/npm-ci) and [npm cache](https://docs.npmjs.com/cli/v11/commands/npm-cache)
-- [Yarn 1 install](https://classic.yarnpkg.com/en/docs/cli/install), [Yarn install (2+)](https://yarnpkg.com/cli/install), [Yarn cache clean (2+)](https://yarnpkg.com/cli/cache/clean)
-- [Node.js April 2024 security release (CVE-2024-27980)](https://nodejs.org/en/blog/vulnerability/april-2024-security-releases-2)
-- [Claude Code: the .claude directory](https://code.claude.com/docs/en/claude-directory.md)
-- [Managing Windows 365 Flex](https://learn.microsoft.com/en-us/windows-365/enterprise/windows-365-flex-manage)
 - [git pull](https://git-scm.com/docs/git-pull)
+- [npm cache](https://docs.npmjs.com/cli/v11/commands/npm-cache), [Yarn cache clean (2+)](https://yarnpkg.com/cli/cache/clean)
