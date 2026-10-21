@@ -15,7 +15,7 @@ The folder holds:
 - `index.mjs`: the one entry point. It starts a command by name: `node index.mjs nmclean --apply`.
 - `lib/`: all code.
   - `lib/commands/`: one file per command; `devclean` has a folder with one file per section. `lib/commands/index.mjs` lists the commands; a new command is one new file plus one line there.
-  - `lib/shared/`: the shared code, one file per area. It holds the safety checks and the plan → confirm → run flow of `nmclean`, `install`, `devclean` and `token`, which import it only through `lib/shared/index.mjs`. `pull` (`gpall.mjs`) is standalone: it deletes nothing, so it needs none of those checks.
+  - `lib/shared/`: the shared code, one file per area. It holds the safety checks and the plan → confirm → run flow of `nmclean`, `install`, `devclean` and `token`, which import it only through `lib/shared/index.mjs`. `pull` (`gpall.mjs`) is standalone: it deletes nothing, so it needs none of those checks. It imports only the status line, `lib/shared/progress.mjs`.
 - `docs/`: the [glossary](docs/GLOSSARY.md), the [safety model](docs/safety-model.md) and the [decisions](docs/adr/).
 - `AGENTS.md`: working rules for coding agents; `CLAUDE.md` loads it.
 - `tests/`: the tests, in `tests/commands/` and `tests/shared/` like the code they test. `tests/setup.mjs` prepares a test run; `tests/utils.mjs` builds files, repos and links for tests.
@@ -24,6 +24,7 @@ All the commands share these conventions:
 
 - an optional bare number sets the number of parallel jobs;
 - an `ok`/`FAIL` line is printed per item as it finishes;
+- while a command plans or runs, a status line at the bottom shows what it is doing, how far it got and how long it has taken. It goes to stderr, so output sent to a file stays clean. Where the terminal can't redraw a line, a plain status line is printed every few seconds instead;
 - failures are listed with details at the end;
 - every item is attempted even after a failure;
 - exit codes: `0` all ok, `1` some items failed, `2` refused before changing anything (including a mistyped option).
@@ -56,7 +57,7 @@ To update, raise `version` in `package.json`, build the package again, and insta
 
 While you work on the scripts, run `npm link` once in this repo instead. `devkit` then runs the code in the repo directly, so every change takes effect without a new package.
 
-Run the commands from your repos folder, for example `devkit nmclean`. Each command has `--help`. `nmclean`, `install`, `devclean` and `token` only print a plan (a dry run); add `--apply` to act on it. If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--yes` after reviewing the dry run.
+Run the commands from your repos folder, for example `devkit nmclean`. Each command has `--help`. `nmclean`, `install`, `devclean` and `token` only print a plan (a dry run), ending with the command that applies it. With `--apply`, they first show a list to pick from: repos for `nmclean` and `install`, `.npmrc` files for `token`, sections for `devclean`. Move with the arrow keys and select with Space; where the terminal does not accept single keypresses, you type the numbers instead, e.g. `1,3,5-7`. `--yes` skips the list and the confirmation and takes everything. If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--yes` after reviewing the dry run.
 
 ### Updating the registry token
 
@@ -143,7 +144,8 @@ Keep `--init`. Without it, `node` is the container's first process, and ended ch
 - **The tests have not been run on Windows.** They pass on macOS and Linux, where the Windows entry of the platform rules is tested too. These Windows behaviours need a real Windows disk or process:
   - junction handling (run the check above);
   - the `taskkill` tree kill;
-  - whether a file in use always blocks the rename.
+  - whether a file in use always blocks the rename;
+  - the arrow-key pick list and the status line in PowerShell and the VS Code terminal.
 - The scripts refuse to run inside a OneDrive folder, so keep your repos outside OneDrive. They find OneDrive through the `OneDrive…` environment variables that the OneDrive client sets; a OneDrive folder without them is not recognised.
 - Yarn 2+ caches are per project and may be committed to git, so they are never cleaned. pnpm and bun projects are skipped.
 

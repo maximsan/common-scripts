@@ -47,6 +47,25 @@ test('dry run changes nothing; typos are refused; a "no" cancels; a "yes" delete
   assert.equal(existsSync(join(app, 'index.js')), true);
 });
 
+test('--apply cleans only the picked repos, with every node_modules inside them', async () => {
+  const root = join(workspace, 'picked');
+  const app = makeRepo(root, 'app');
+  const lib = makeRepo(root, 'lib');
+
+  write(join(app, 'node_modules', 'a.js'));
+  write(join(lib, 'node_modules', 'a.js'));
+  write(join(lib, 'packages', 'ui', 'package.json'), '{}');
+  write(join(lib, 'packages', 'ui', 'node_modules', 'a.js'));
+
+  const picked = testContext({ cwd: root, stateDir, picks: [1] });
+
+  assert.equal(await main(['--apply'], picked.context), 0, picked.output());
+  assert.match(picked.output(), /^lib {2}2 item\(s\)/m);
+  assert.equal(existsSync(join(app, 'node_modules')), true);
+  assert.equal(existsSync(join(lib, 'node_modules')), false);
+  assert.equal(existsSync(join(lib, 'packages', 'ui', 'node_modules')), false);
+});
+
 test('as a process: refuses --apply without a terminal, deletes with --apply --yes', () => {
   const root = join(workspace, 'process');
   const app = makeRepo(root, 'app');

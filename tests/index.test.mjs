@@ -53,5 +53,5 @@ test('runs a command when started through a symlink, as the devkit command from 
   const result = runCli(['nmclean'], { cwd: root, stateDir, entry: link });
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /node_modules in 1 repo/);
+  assert.match(result.stdout, /node_modules in repos under/);
 });

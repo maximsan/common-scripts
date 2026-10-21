@@ -47,15 +47,19 @@ export function runCli(args, { cwd, stateDir, env = {}, entry = INDEX_PATH }) {
 }
 
 /**
- * A run context for calling a command's main in-process: printed lines are collected, and every
- * confirmation gets the same answer. LOCALAPPDATA points at `stateDir`, as in runCli: on Windows the
- * test folders sit in the system temp folder inside the real LOCALAPPDATA, where the scripts refuse to run.
- * @param {{ cwd: string, stateDir: string, tempDir?: string, answer?: boolean }} options
- *   the folder to run in, where state goes, the temp folder, and the answer to "continue?"
+ * A run context for calling a command's main in-process: printed lines are collected, every
+ * confirmation gets the same answer, and every pick list gets the same picks. LOCALAPPDATA points at
+ * `stateDir`, as in runCli: on Windows the test folders sit in the system temp folder inside the real
+ * LOCALAPPDATA, where the scripts refuse to run.
+ * @param {{
+ *   cwd: string, stateDir: string, tempDir?: string, answer?: boolean, picks?: number[] | null,
+ * }} options
+ *   the folder to run in, where state goes, the temp folder, the answer to "continue?", and the picked
+ *   indexes (null: every line)
  * @returns {{ context: import('../lib/shared/index.mjs').RunContext, output: () => string }}
  *   the context, and everything printed so far as one text
  */
-export function testContext({ cwd, stateDir, tempDir = tmpdir(), answer = true }) {
+export function testContext({ cwd, stateDir, tempDir = tmpdir(), answer = true, picks = null }) {
   /** @type {string[]} */
   const lines = [];
   const context = {
@@ -67,6 +71,19 @@ export function testContext({ cwd, stateDir, tempDir = tmpdir(), answer = true }
       lines.push(line);
     },
     confirm: async () => answer,
+
+    /**
+     * Pick from a list without a terminal.
+     * @param {string} title  the line above the list
+     * @param {string[]} labels  the list's lines
+     * @returns {Promise<number[]>} `picks`, or every line
+     */
+    pick: async (title, labels) => {
+      lines.push(title, ...labels);
+
+      return picks ?? [...labels.keys()];
+    },
+    progress: { start: () => {}, advance: () => {}, stop: () => {}, print: () => {} },
   };
 
   return { context, output: () => lines.join('\n') };

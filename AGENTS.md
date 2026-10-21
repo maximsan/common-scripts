@@ -20,12 +20,12 @@ The scripts themselves run on Node 18 and need no install. The Linux test run in
 ## Architecture
 
 - **One entry point.** `index.mjs` looks the command up in `lib/commands/index.mjs` (`COMMANDS`, where a command may also have aliases) and starts it through `runCommand` (`lib/shared/cli.mjs`). `runCommand` builds the [run context](docs/GLOSSARY.md) from the process and sets the exit code. A thrown `SafetyError` becomes exit code 2.
-- **Commands import the shared code only through `lib/shared/index.mjs`.** `pull` (`lib/commands/gpall.mjs`) is the exception: it imports nothing from `lib/shared/`, so a few helpers are copied there on purpose. Comments that say "keep in sync with gpall.mjs" mark them.
+- **Commands import the shared code only through `lib/shared/index.mjs`.** `pull` (`lib/commands/gpall.mjs`) is the exception: it imports only `lib/shared/progress.mjs`, so a few helpers are copied there on purpose. Comments that say "keep in sync with gpall.mjs" mark them.
 - **Every command except pull has the same shape:**
   1. `parseArgs`;
   2. `findReposHere`, which refuses an unsafe current folder before it finds repos;
   3. build plan sections, whose items are `{ name, skip, run }`;
-  4. `planAndRun`, which prints the plan, stops there without `--apply`, asks for confirmation, takes the lock, runs the items in a pool and writes the log.
+  4. `planAndRun`, which with `--apply` first lets the person pick groups of items (`PlanItem.group`), prints the plan, stops there without `--apply`, asks for confirmation, takes the lock, runs the items in a pool and writes the log.
 - **Check and remove come in pairs.** The plan calls the check (`checkRepoFolder`, `checkTempEntry`). Each item's `run` calls the matching remove (`removeRepoFolder`, `removeTempEntry`), which runs the check again first. Every folder deletion ends in `safeRemoveTree` (`lib/shared/remove.mjs`): it renames the folder, validates it again, then deletes. Never delete through any other path.
 - **Operating-system differences live only in `PLATFORM_RULES`** (`lib/shared/platform.mjs`, [decision 5](docs/adr/0005-platform-rules-table.md)). How to add one is written above the `PlatformRules` type.
 - **Tests mirror `lib/`** in `tests/commands/` and `tests/shared/`. `tests/setup.mjs`:
