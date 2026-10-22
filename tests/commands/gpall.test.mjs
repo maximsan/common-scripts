@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseArgs, pullAll } from '../../lib/commands/gpall.mjs';
-import { runCli, tempWorkspace } from '../setup.mjs';
+import { main, parseArgs, pullAll } from '../../lib/commands/gpall.mjs';
+import { runCli, tempWorkspace, testContext } from '../setup.mjs';
 import { git } from '../utils.mjs';
 
 const { root: workspace, cleanup } = tempWorkspace('gpall');
@@ -91,6 +91,27 @@ test('pullAll attempts every repo, skips folders without .git, and keeps going a
   // Failed repos are left untouched.
   assert.equal(readFileSync(join(root, 'dirty-conflict', 'a.txt'), 'utf8'), 'my edit\n');
   assert.equal(git(join(root, 'diverged'), 'log', '-1', '--format=%s').toString().trim(), 'local');
+});
+
+test('main prints a line per repo, then the failed repos with git\'s error text', async () => {
+  const { context, output } = testContext({ cwd: root, stateDir: join(workspace, 'state') });
+
+  assert.equal(await main(['2'], context), 1);
+  assert.match(output(), /^ok {4}clean {11}main$/m);
+  assert.match(output(), /^FAIL {2}broken-remote {3}main$/m);
+  assert.match(output(), /^Done: 5 repos, 4 failed:$/m);
+  assert.match(output(), /^--- diverged$/m);
+});
+
+test('main without repos says so and succeeds', async () => {
+  const empty = join(workspace, 'empty');
+
+  mkdirSync(empty);
+
+  const { context, output } = testContext({ cwd: empty, stateDir: join(workspace, 'state') });
+
+  assert.equal(await main([], context), 0);
+  assert.match(output(), /^No git repositories found under /);
 });
 
 test('parseArgs: optional job count or --help; anything else is refused', () => {
