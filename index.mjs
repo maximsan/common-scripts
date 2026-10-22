@@ -2,7 +2,7 @@
 // @ts-check
 // index.mjs - the one entry point: runs a command from lib/commands/ by name.
 
-import { COMMANDS, findCommand } from './lib/commands/index.mjs';
+import { COMMANDS, findCommandName } from './lib/commands/index.mjs';
 import { EXIT_OK, EXIT_REFUSED, HELP_FLAGS, runCommand } from './lib/shared/index.mjs';
 
 // `process.argv` holds node and this file first.
@@ -24,13 +24,13 @@ In a terminal, all except pull print the plan, then let you pick and confirm. Ea
 `;
 
 const [name, ...argv] = process.argv.slice(ARGS_START);
-const command = name === undefined ? undefined : findCommand(name);
+const command = name === undefined ? undefined : findCommandName(name);
 
 if (name === undefined || HELP_FLAGS.includes(name)) {
   console.log(HELP);
   process.exitCode = EXIT_OK;
 } else if (command) {
-  await runCommand(command.main, argv);
+  await runCommand(command, COMMANDS[command].main, argv);
 } else {
   // The text is not repeated: a token pasted in the wrong place must not end up in the output.
   console.error(`Unknown command. Nothing was changed.\n\n${HELP}`);

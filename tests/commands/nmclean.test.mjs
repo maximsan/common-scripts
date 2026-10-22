@@ -79,7 +79,7 @@ test('--only takes repo names and folder paths; a name that matches nothing chan
   write(join(lib, 'packages', 'ui', 'package.json'), '{}');
   write(join(lib, 'packages', 'ui', 'node_modules', 'a.js'));
 
-  const dryRun = testContext({ cwd: root, stateDir });
+  const dryRun = testContext({ cwd: root, stateDir, command: 'nmclean' });
 
   assert.equal(await main(['--only', 'app,lib\\packages\\ui\\node_modules/', '--dry-run'], dryRun.context), 0);
   assert.match(dryRun.output(), /app\/node_modules/);

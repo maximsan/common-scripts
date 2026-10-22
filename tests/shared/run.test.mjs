@@ -30,7 +30,7 @@ test('planAndRun attempts every item, returns exit code 1 on a failure, and refu
     skippedItem('kept', 'reason'),
   ];
   const sections = [{ title: 'test', items }];
-  const run = await planAndRun({ sections, options, verb: 'run', command: 'test', args: [], context });
+  const run = await planAndRun({ sections, options, verb: 'run', args: [], context });
 
   assert.equal(run.code, 1);
   assert.equal(run.applied, true);
@@ -41,7 +41,7 @@ test('planAndRun attempts every item, returns exit code 1 on a failure, and refu
 
   write(join(stateDir, 'devkit.lock'), '999999\n');
 
-  const whileLocked = planAndRun({ sections, options, verb: 'run', command: 'test', args: [], context });
+  const whileLocked = planAndRun({ sections, options, verb: 'run', args: [], context });
 
   await assert.rejects(whileLocked, /Another devkit script is running/);
 });
@@ -78,7 +78,7 @@ test('in a terminal, only the picked groups run; nothing picked changes nothing;
    * @returns {ReturnType<typeof planAndRun>} the outcome
    */
   const runWith = (context, yes = false) => planAndRun({
-    sections, options: { ...options, yes }, verb: 'run', command: 'test', args: [], context,
+    sections, options: { ...options, yes }, verb: 'run', args: [], context,
   });
   const picked = testContext({ cwd: workspace, stateDir, picks: [1] });
 
@@ -102,12 +102,13 @@ test('in a terminal, only the picked groups run; nothing picked changes nothing;
 });
 
 test('a dry run ends with the commands that act on it', async () => {
-  const { context, output } = testContext({ cwd: workspace, stateDir: join(workspace, 'hint-state') });
+  const stateDir = join(workspace, 'hint-state');
+  const { context, output } = testContext({ cwd: workspace, stateDir, command: 'devclean' });
   const items = [{ name: 'one', skip: null, run: async () => ({ ok: true, output: '' }) }];
   const sections = [{ title: 'test', items }];
   const options = { yes: false, dryRun: true, help: false, jobs: 1 };
 
-  await planAndRun({ sections, options, verb: 'run', command: 'devclean', args: ['--days', '60'], context });
+  await planAndRun({ sections, options, verb: 'run', args: ['--days', '60'], context });
   assert.match(output(), /^ {2}devkit devclean --days 60 {8}pick and confirm, in a terminal$/m);
   assert.match(output(), /^ {2}devkit devclean --days 60 --yes {2}everything, without questions$/m);
 });

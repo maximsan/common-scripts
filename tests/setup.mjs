@@ -52,22 +52,24 @@ export function runCli(args, { cwd, stateDir, env = {}, entry = INDEX_PATH }) {
  * `stateDir`, as in runCli: on Windows the test folders sit in the system temp folder inside the real
  * LOCALAPPDATA, where the scripts refuse to run.
  * @param {{
- *   cwd: string, stateDir: string, home?: string, tempDir?: string, answer?: boolean, picks?: number[] | null,
- *   interactive?: boolean,
+ *   cwd: string, stateDir: string, command?: string, home?: string, tempDir?: string, answer?: boolean,
+ *   picks?: number[] | null, interactive?: boolean,
  * }} options
- *   the folder to run in, where state goes, the home folder (default: a folder in stateDir, so the real
- *   ~/.claude is never read and the home-folder refusal doesn't fire), the temp folder, the answer to
- *   "continue?", the picked indexes (null: every line), and whether a person can answer, as in a terminal
- *   (the default)
+ *   the folder to run in, where state goes, the command's name for hints and logs, the home folder
+ *   (default: a folder in stateDir, so the real ~/.claude is never read and the home-folder refusal doesn't
+ *   fire), the temp folder, the answer to "continue?", the picked indexes (null: every line), and whether a
+ *   person can answer, as in a terminal (the default)
  * @returns {{ context: import('../lib/shared/index.mjs').RunContext, output: () => string }}
  *   the context, and everything printed so far as one text
  */
 export function testContext({
-  cwd, stateDir, home = join(stateDir, 'home'), tempDir = tmpdir(), answer = true, picks = null, interactive = true,
+  cwd, stateDir, command = 'test', home = join(stateDir, 'home'), tempDir = tmpdir(),
+  answer = true, picks = null, interactive = true,
 }) {
   /** @type {string[]} */
   const lines = [];
   const context = {
+    command,
     cwd,
     home,
     env: { ...process.env, LOCALAPPDATA: stateDir },
