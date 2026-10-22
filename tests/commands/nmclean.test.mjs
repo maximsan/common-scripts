@@ -141,10 +141,8 @@ test('as a process: without a terminal only the plan is printed; --yes deletes',
   assert.equal(existsSync(join(app, 'node_modules')), false);
 });
 
-test('refuses to run in the home folder', () => {
-  const env = { HOME: workspace, USERPROFILE: workspace };
-  const result = runCli(['nmclean'], { cwd: workspace, stateDir, env });
+test('refuses to run in the home folder', async () => {
+  const { context } = testContext({ cwd: workspace, stateDir, home: workspace });
 
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /home folder/);
+  await assert.rejects(main([], context), /home folder/);
 });

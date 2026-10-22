@@ -3,6 +3,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { SafetyError } from '../../lib/shared/errors.mjs';
 import { HOST_RULES, platformRules } from '../../lib/shared/platform.mjs';
@@ -38,7 +39,7 @@ test('Windows rules: drive roots, network paths, home and protected folders are 
 });
 
 test('assertSafeRoot refuses filesystem root, home and AppData', async () => {
-  await assert.rejects(assertSafeRoot('/'), SafetyError);
+  await assert.rejects(assertSafeRoot('/', { home: join(workspace, 'home') }), SafetyError);
 
   const home = join(workspace, 'home');
   const appdata = join(workspace, 'appdata');
@@ -67,14 +68,14 @@ test('assertSafeRoot on macOS and Linux refuses system folders and app data in t
 });
 
 test('resolveTempDir accepts the system temp folder and refuses anything else', async () => {
-  assert.ok(await resolveTempDir());
+  assert.ok(await resolveTempDir({ home: homedir() }));
   await assert.rejects(resolveTempDir({ temp: workspace, home: workspace, rules: WINDOWS }), /expected/);
   await assert.rejects(
-    resolveTempDir({ temp: join(workspace, '..'), rules: platformRules('freebsd') }),
+    resolveTempDir({ temp: join(workspace, '..'), home: workspace, rules: platformRules('freebsd') }),
     /no known temp folder on freebsd/,
   );
 
   if (!ON_WINDOWS) {
-    await assert.rejects(resolveTempDir({ temp: '/usr' }), /expected/);
+    await assert.rejects(resolveTempDir({ temp: '/usr', home: homedir() }), /expected/);
   }
 });

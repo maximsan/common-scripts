@@ -37,6 +37,13 @@ const NO_PLATFORM_CHECKS = [
   { selector: 'CallExpression[callee.property.name="platform"]', message: PLATFORM_MESSAGE },
 ];
 
+// The home folder comes from the run context; only processContext in lib/shared/state.mjs reads it from the system.
+const HOME_MESSAGE = 'Take the home folder from the run context (context.home).';
+const NO_HOME_READS = [
+  { selector: 'ImportSpecifier[imported.name="homedir"]', message: HOME_MESSAGE },
+  { selector: 'CallExpression[callee.property.name="homedir"]', message: HOME_MESSAGE },
+];
+
 // Blank lines separate the logical parts of a function: declarations, blocks, and the final return.
 const PADDING_LINES = [
   { blankLine: 'always', prev: ['const', 'let'], next: '*' },
@@ -86,7 +93,7 @@ export default [
 
       'id-length': ['error', { min: MIN_NAME_LENGTH, properties: 'never' }],
       'id-denylist': ['error', ...UNCLEAR_NAMES],
-      'no-restricted-syntax': ['error', ...NO_INLINE_VALUES, ...NO_PLATFORM_CHECKS],
+      'no-restricted-syntax': ['error', ...NO_INLINE_VALUES, ...NO_PLATFORM_CHECKS, ...NO_HOME_READS],
 
       // Every exported function has a doc comment: other files use it without reading its body.
       // A function used only in its own file gets one only when its name and code don't explain it.
@@ -100,6 +107,10 @@ export default [
       // Types are checked by `npm run typecheck`, which knows Node's types; this rule doesn't.
       'jsdoc/no-undefined-types': 'off',
     },
+  },
+  {
+    files: ['lib/shared/state.mjs'],
+    rules: { 'no-restricted-syntax': ['error', ...NO_INLINE_VALUES, ...NO_PLATFORM_CHECKS] },
   },
   {
     // Tests keep fixture values and expected-output patterns inline, where they read best.

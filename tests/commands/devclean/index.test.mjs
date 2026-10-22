@@ -17,25 +17,28 @@ test('applied cleanup removes old temp entries, records the run, and --due goes 
 
   makeRepo(root, 'app');
 
-  const tempDir = join(workspace, 'cli-temp');
+  // Windows accepts a temp folder only inside <home>\AppData\Local\Temp; the workspace, inside the system temp
+  // folder, is accepted on macOS and Linux too.
+  const home = join(workspace, 'home');
+  const tempDir = join(home, 'AppData', 'Local', 'Temp');
 
   write(join(tempDir, 'old.tmp'));
   backdate(join(tempDir, 'old.tmp'), 30);
   write(join(tempDir, 'new.tmp'));
 
   const stateDir = join(workspace, 'state');
-  const before = testContext({ cwd: root, stateDir, tempDir });
+  const before = testContext({ cwd: root, stateDir, home, tempDir });
 
   assert.equal(await main(['--due'], before.context), 0);
   assert.match(before.output(), /no cleanup recorded/);
 
-  const applied = testContext({ cwd: root, stateDir, tempDir });
+  const applied = testContext({ cwd: root, stateDir, home, tempDir });
 
   assert.equal(await main(['--only', 'temp'], applied.context), 0, applied.output());
   assert.equal(existsSync(join(tempDir, 'old.tmp')), false);
   assert.equal(existsSync(join(tempDir, 'new.tmp')), true);
 
-  const later = testContext({ cwd: root, stateDir, tempDir });
+  const later = testContext({ cwd: root, stateDir, home, tempDir });
 
   assert.equal(await main(['--due'], later.context), 0);
   assert.equal(later.output(), '');
