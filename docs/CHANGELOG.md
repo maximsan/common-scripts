@@ -2,6 +2,12 @@
 
 What changed in each version of the package that `npm pack` builds. The newest version comes first. Version numbers follow [semantic versioning](https://semver.org/): a new feature raises the middle number, a fix the last one.
 
+## 2.2.0 (2026-10-23)
+
+### Changed
+
+- Result lines show `ok` in green and `FAIL` in red where the terminal shows colors. `skip` in `pull` and `keep` in a plan are dim. Output sent to a pipe or a file, and the log file, stay plain text.
+
 ## 2.1.0 (2026-10-23)
 
 ### Changed
