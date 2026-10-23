@@ -2,6 +2,12 @@
 
 What changed in each version of the package that `npm pack` builds. The newest version comes first. Version numbers follow [semantic versioning](https://semver.org/): a new feature raises the middle number, a fix the last one.
 
+## 2.1.0 (2026-10-23)
+
+### Changed
+
+- `pull` skips a repo whose branch has no upstream branch, such as a read-only clone, or whose HEAD is detached. The repo gets a `skip` line, the summary counts it, and it no longer makes the run fail.
+
 ## 2.0.0 (2026-10-21)
 
 A major version, because commands that use `--apply`, `--build-days` or `--temp-days` stop working. Run them without `--apply` in a terminal, or replace `--apply --yes` with `--yes`; leave out the two `devclean` options.
