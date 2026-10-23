@@ -2,6 +2,12 @@
 
 What changed in each version of the package that `npm pack` builds. The newest version comes first. Version numbers follow [semantic versioning](https://semver.org/): a new feature raises the middle number, a fix the last one.
 
+## Unreleased
+
+### Changed
+
+- The question before acting asks `[y/N]`: type `y` or `yes` to go ahead. Enter alone, or any other answer, changes nothing.
+
 ## 2.2.0 (2026-10-23)
 
 ### Changed

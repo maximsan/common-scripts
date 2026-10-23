@@ -58,7 +58,7 @@ To update, raise `version` in `package.json` and add the changes to [docs/CHANGE
 
 While you work on the scripts, run `npm link` once in this repo instead. `devkit` then runs the code in the repo directly, so every change takes effect without a new package.
 
-Run the commands from your repos folder, for example `devkit nmclean`. Each command has `--help`. In a terminal, `nmclean`, `install`, `devclean` and `token` print the plan, then show a list to pick from, then ask you to type "yes":
+Run the commands from your repos folder, for example `devkit nmclean`. Each command has `--help`. In a terminal, `nmclean`, `install`, `devclean` and `token` print the plan, then show a list to pick from, then ask "[y/N]": type `y` to go ahead.
 
 - the list holds `node_modules` folders for `nmclean`, repos for `install`, `.npmrc` files for `token`, and sections for `devclean`;
 - move with the arrow keys and select with Space; Enter with nothing selected takes the line under the cursor; Esc cancels;
@@ -67,7 +67,7 @@ Run the commands from your repos folder, for example `devkit nmclean`. Each comm
 Other ways to run them:
 
 - `--dry-run` only prints the plan. Without a terminal, for example when the output goes to a file, the commands only print the plan too.
-- `--yes` takes everything, without the list and without the "yes" question. It is the only way to act where no person can answer.
+- `--yes` takes everything, without the list and without the y/N question. It is the only way to act where no person can answer.
 - `nmclean --only` narrows the plan to repo names or folder paths as the plan shows them (`devkit nmclean --only ue-shared,ue-wof/node_modules`); `devclean --only` takes section names.
 
 If a script reports that there is no interactive terminal (Git Bash outside VS Code can do this), use the VS Code terminal or PowerShell, or add `--yes` after reviewing the plan.
@@ -78,7 +78,7 @@ If a script reports that there is no interactive terminal (Git Bash outside VS C
 
 ```bash
 devkit token npm_NewToken1234XyZ9 --dry-run   # lists every .npmrc and what would change
-devkit token npm_NewToken1234XyZ9             # the same list, then pick files and type "yes" to write them
+devkit token npm_NewToken1234XyZ9             # the same list, then pick files and type "y" to write them
 ```
 
 ```
@@ -101,7 +101,7 @@ flowchart LR
   B -- due --> C[devclean]
   C --> D[Review plan and agent-files report]
   D --> E[Pick sections]
-  E --> F[Typed yes]
+  E --> F[Typed y]
   F --> G[Lock, run items in a pool, re-check each before deleting]
   G --> H[ok/FAIL per item, failures listed, log written, last-cleanup date saved]
 ```
