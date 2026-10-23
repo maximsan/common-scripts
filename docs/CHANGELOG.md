@@ -7,6 +7,7 @@ What changed in each version of the package that `npm pack` builds. The newest v
 ### Changed
 
 - The question before acting asks `[y/N]`: type `y` or `yes` to go ahead. Enter alone, or any other answer, changes nothing.
+- The key help above the pick list is easier to read: hints are separated by `·`, keys are bold and the rest dim. The `>` pointer has the same pink as the progress line.
 
 ## 2.2.0 (2026-10-23)
 
