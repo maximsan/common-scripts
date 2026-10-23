@@ -2,7 +2,9 @@
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { DIM, GREEN, RED, RESET } from '../../lib/shared/colors.mjs';
 import { planAndRun, skippedItem } from '../../lib/shared/run.mjs';
 import { tempWorkspace, testContext } from '../setup.mjs';
 import { write } from '../utils.mjs';
@@ -111,4 +113,25 @@ test('a dry run ends with the commands that act on it', async () => {
   await planAndRun({ sections, options, verb: 'run', args: ['--days', '60'], context });
   assert.match(output(), /^ {2}devkit devclean --days 60 {8}pick and confirm, in a terminal$/m);
   assert.match(output(), /^ {2}devkit devclean --days 60 --yes {2}everything, without questions$/m);
+});
+
+test('in color, ok is green, FAIL red and keep dim; the log file stays plain', async () => {
+  const { context, output } = testContext({ cwd: workspace, stateDir: join(workspace, 'color-state'), colored: true });
+  const items = [
+    { name: 'good', skip: null, run: async () => ({ ok: true, output: '' }) },
+    { name: 'bad', skip: null, run: async () => ({ ok: false, output: 'boom' }) },
+    skippedItem('kept', 'reason'),
+  ];
+  const options = { yes: true, dryRun: false, help: false, jobs: 1 };
+
+  await planAndRun({ sections: [{ title: 'test', items }], options, verb: 'run', args: [], context });
+  assert.ok(output().includes(`\n  ${DIM}keep${RESET}  kept`), output());
+  assert.ok(output().includes(`\n${GREEN}ok  ${RESET}  good`), output());
+  assert.ok(output().includes(`\n${RED}FAIL${RESET}  bad`), output());
+
+  const logFile = output().match(/Log: (.+)$/m)?.[1] ?? '';
+  const logged = readFileSync(logFile, 'utf8');
+
+  assert.match(logged, / FAIL bad \| boom$/m);
+  assert.equal(logged.includes(RESET), false);
 });

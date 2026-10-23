@@ -7,6 +7,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { painter } from '../lib/shared/colors.mjs';
 
 const TEXT_ENCODING = 'utf8';
 
@@ -53,18 +54,18 @@ export function runCli(args, { cwd, stateDir, env = {}, entry = INDEX_PATH }) {
  * LOCALAPPDATA, where the scripts refuse to run.
  * @param {{
  *   cwd: string, stateDir: string, command?: string, home?: string, tempDir?: string, answer?: boolean,
- *   picks?: number[] | null, interactive?: boolean,
+ *   picks?: number[] | null, interactive?: boolean, colored?: boolean,
  * }} options
  *   the folder to run in, where state goes, the command's name for hints and logs, the home folder
  *   (default: a folder in stateDir, so the real ~/.claude is never read and the home-folder refusal doesn't
  *   fire), the temp folder, the answer to "continue?", the picked indexes (null: every line), and whether a
- *   person can answer, as in a terminal (the default)
+ *   person can answer, as in a terminal (the default), and whether the output shows colors (default: no)
  * @returns {{ context: import('../lib/shared/index.mjs').RunContext, output: () => string }}
  *   the context, and everything printed so far as one text
  */
 export function testContext({
   cwd, stateDir, command = 'test', home = join(stateDir, 'home'), tempDir = tmpdir(),
-  answer = true, picks = null, interactive = true,
+  answer = true, picks = null, interactive = true, colored = false,
 }) {
   /** @type {string[]} */
   const lines = [];
@@ -78,6 +79,7 @@ export function testContext({
     print: (line = '') => {
       lines.push(line);
     },
+    paint: painter(colored),
     confirm: async () => answer,
 
     /**
