@@ -29,7 +29,7 @@ test('scanTree finds a nested repo like measure does, and never enters a folder 
   write(join(outside, '.git', 'HEAD'));
   write(join(tree, 'pkg', 'index.js'));
   linkFolder(outside, join(tree, 'pkg', 'linked'));
-  assert.deepEqual(await scanTree(tree), { hasNestedRepo: false, hasSpecialFile: false });
+  assert.deepEqual(await scanTree(tree), { hasNestedRepo: false });
   assert.equal((await measure(tree)).hasNestedRepo, false);
 
   write(join(tree, 'pkg', 'vendored', '.git', 'HEAD'));
