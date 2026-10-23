@@ -43,11 +43,12 @@ before(() => {
   git(seed, 'push', '-q', 'origin', 'main');
 
   // Git for Windows checks files out with CRLF line endings by default; the clones keep the committed ones.
-  for (const name of ['clean', 'diverged', 'dirty-conflict', 'broken-remote']) {
+  for (const name of ['clean', 'diverged', 'dirty-conflict', 'broken-remote', 'read-only']) {
     execFileSync('git', ['clone', '-q', '-c', 'core.autocrlf=false', remote, join(root, name)]);
   }
 
   git(join(root, 'broken-remote'), 'remote', 'set-url', 'origin', join(workspace, 'does-not-exist.git'));
+  git(join(root, 'read-only'), 'branch', '--unset-upstream');
   execFileSync('git', ['init', '-q', join(root, 'no-upstream')]);
   mkdirSync(join(root, 'not-a-repo'));
 
@@ -64,7 +65,7 @@ before(() => {
 
 after(cleanup);
 
-test('pullAll attempts every repo, skips folders without .git, and keeps going after failures', async () => {
+test('pullAll tries every repo, skips folders without .git and branches without upstream, keeps going', async () => {
   /** @type {string[]} */
   const seen = [];
   const results = await pullAll(root, {
@@ -76,14 +77,22 @@ test('pullAll attempts every repo, skips folders without .git, and keeps going a
   const byName = Object.fromEntries(results.map((result) => [result.name, result]));
 
   assert.deepEqual(results.map((result) => result.name), [
-    'broken-remote', 'clean', 'dirty-conflict', 'diverged', 'no-upstream',
+    'broken-remote', 'clean', 'dirty-conflict', 'diverged', 'no-upstream', 'read-only',
   ]);
-  assert.equal(seen.length, 5);
+  assert.equal(seen.length, 6);
 
   assert.equal(byName.clean.ok, true);
   assert.equal(readFileSync(join(root, 'clean', 'a.txt'), 'utf8'), 'v2\n');
 
-  for (const name of ['diverged', 'dirty-conflict', 'broken-remote', 'no-upstream']) {
+  for (const name of ['no-upstream', 'read-only']) {
+    assert.equal(byName[name].skip, 'no upstream branch', `${name} should be skipped`);
+    assert.equal(byName[name].ok, true, `${name} should not count as failed`);
+  }
+
+  // A skipped repo is not pulled, though its remote has a newer commit.
+  assert.equal(readFileSync(join(root, 'read-only', 'a.txt'), 'utf8'), 'v1\n');
+
+  for (const name of ['diverged', 'dirty-conflict', 'broken-remote']) {
     assert.equal(byName[name].ok, false, `${name} should fail`);
     assert.notEqual(byName[name].output, '', `${name} should carry git's error text`);
   }
@@ -99,7 +108,9 @@ test('main prints a line per repo, then the failed repos with git\'s error text'
   assert.equal(await main(['2'], context), 1);
   assert.match(output(), /^ok {4}clean {11}main$/m);
   assert.match(output(), /^FAIL {2}broken-remote {3}main$/m);
-  assert.match(output(), /^Done: 5 repos, 4 failed:$/m);
+  assert.match(output(), /^skip {2}read-only {7}main {2}no upstream branch$/m);
+  assert.match(output(), /^Done: 6 repos, 2 skipped, 3 failed:$/m);
+  assert.doesNotMatch(output(), /^--- read-only$/m);
   assert.match(output(), /^--- diverged$/m);
 });
 

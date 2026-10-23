@@ -4,7 +4,7 @@ Node.js scripts for the folder that holds your git repos. They run on Windows (b
 
 | Command | What it does | Default |
 |---|---|---|
-| `pull` (alias `gpall`) | `git pull --ff-only --prune` in every repo, in parallel | runs immediately (a refused pull changes nothing) |
+| `pull` (alias `gpall`) | `git pull --ff-only --prune` in every repo, in parallel; a branch without an upstream branch is skipped | runs immediately (a refused pull changes nothing) |
 | `nmclean` | deletes `node_modules` in every repo, including workspace packages | plan, pick, confirm |
 | `install` (alias `nminstall`) | lockfile-exact install: `npm ci`, `yarn install --frozen-lockfile` (Yarn 1) or `yarn install --immutable` (Yarn 2+) | plan, pick, confirm; one repo at a time |
 | `devclean` | periodic cleanup: stale `node_modules`, old build outputs, old temp-folder entries, npm/Yarn 1 caches; review-only report of agent files | plan, pick, confirm |
@@ -15,7 +15,7 @@ The folder holds:
 - `index.mjs`: the one entry point. It starts a command by name: `node index.mjs nmclean`.
 - `lib/`: all code.
   - `lib/commands/`: one file per command; `devclean` has a folder with one file per section. `lib/commands/index.mjs` lists the commands; a new command is one new file plus one line there.
-  - `lib/shared/`: the shared code, one file per area. It holds the safety checks and the plan → confirm → run flow of `nmclean`, `install`, `devclean` and `token`, which import it only through `lib/shared/index.mjs`. `pull` (`gpall.mjs`) is standalone: it deletes nothing, so it needs none of those checks. It imports only the status line, `lib/shared/progress.mjs`.
+  - `lib/shared/`: the shared code, one file per area. It holds the safety checks and the plan → confirm → run flow of `nmclean`, `install`, `devclean` and `token`, which import it only through `lib/shared/index.mjs`. `pull` (`gpall.mjs`) is standalone: it deletes nothing, so it needs none of those checks, and it imports nothing from `lib/shared/`.
 - `docs/`: the [glossary](docs/GLOSSARY.md), the [safety model](docs/safety-model.md), the [decisions](docs/adr/) and the [changelog](docs/CHANGELOG.md).
 - `AGENTS.md`: working rules for coding agents; `CLAUDE.md` loads it.
 - `tools/`: one-off diagnostics, run by hand. `tools/nmclean-timing.mjs` times each step of an `nmclean` dry run. They are not in the package and not linted.
